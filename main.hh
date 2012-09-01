@@ -5,6 +5,25 @@
 #include <QTextEdit>
 #include <QLineEdit>
 #include <QUdpSocket>
+#include <QKeyEvent>
+
+
+class TextEntryWidget : public QTextEdit
+{
+  Q_OBJECT
+
+
+
+public:
+  TextEntryWidget(QWidget *parent);
+
+protected:
+  void keyPressEvent ( QKeyEvent* e);
+
+signals:
+  void returnPressed();
+
+};
 
 class ChatDialog : public QDialog
 {
@@ -18,7 +37,7 @@ public slots:
 
 private:
 	QTextEdit *textview;
-	QLineEdit *textline;
+	TextEntryWidget *textline;
 };
 
 class NetSocket : public QUdpSocket

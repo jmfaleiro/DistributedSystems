@@ -4,8 +4,24 @@
 #include <QVBoxLayout>
 #include <QApplication>
 #include <QDebug>
+#include <QKeyEvent>
 
 #include "main.hh"
+
+TextEntryWidget::TextEntryWidget(QWidget * parent) : QTextEdit(parent)  
+{
+  
+}
+
+void TextEntryWidget::keyPressEvent(QKeyEvent *e)
+{
+  if (e->key() == Qt::Key_Enter || e->key() == Qt::Key_Return){
+    emit returnPressed();
+  }
+  else{
+    QTextEdit::keyPressEvent(e);
+  }
+}
 
 ChatDialog::ChatDialog()
 {
@@ -22,7 +38,8 @@ ChatDialog::ChatDialog()
 	//
 	// You might change this into a read/write QTextEdit,
 	// so that the user can easily enter multi-line messages.
-	textline = new QLineEdit(this);
+	textline = new TextEntryWidget(this);
+	textline->setFocus();
 
 	// Lay out the widgets to appear in the main window.
 	// For Qt widget and layout concepts see:
@@ -38,12 +55,14 @@ ChatDialog::ChatDialog()
 		this, SLOT(gotReturnPressed()));
 }
 
+
+
 void ChatDialog::gotReturnPressed()
 {
 	// Initially, just echo the string locally.
 	// Insert some networking code here...
-	qDebug() << "FIX: send message to other peers: " << textline->text();
-	textview->append(textline->text());
+  qDebug() << "FIX: send message to other peers: " << textline->toPlainText();
+  textview->append(textline->toPlainText());
 
 	// Clear the textline to get ready for the next input message.
 	textline->clear();
