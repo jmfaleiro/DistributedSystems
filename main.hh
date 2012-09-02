@@ -6,6 +6,30 @@
 #include <QLineEdit>
 #include <QUdpSocket>
 #include <QKeyEvent>
+#include <QDataStream>
+#include <QByteArray>
+#include <QVariant>
+
+
+
+class MessageSender : public QObject
+{
+
+  Q_OBJECT
+
+public: 
+  MessageSender();
+
+public slots:
+  void gotSendMessage (const QString &s);
+  void gotReceivedMessage (const QByteArray &arr);
+  
+signals:
+  void sendMessage(const QByteArray &arr);
+  void receivedMessage (const QString &s);
+
+};
+
 
 
 class TextEntryWidget : public QTextEdit
@@ -34,10 +58,16 @@ public:
 
 public slots:
 	void gotReturnPressed();
+  void gotNewMessage(const QString& s);
+
+signals:
+  void sendMessage (const QString& s);
+
 
 private:
 	QTextEdit *textview;
 	TextEntryWidget *textline;
+
 };
 
 class NetSocket : public QUdpSocket
@@ -50,8 +80,17 @@ public:
 	// Bind this socket to a Peerster-specific default port.
 	bool bind();
 
+public slots:
+  void gotSendMessage(const QByteArray &datagram);
+  void readData();
+
+signals:
+  void newData(const QByteArray& data);
+
 private:
 	int myPortMin, myPortMax;
+  QHostAddress * me;
 };
+
 
 #endif // PEERSTER_MAIN_HH
