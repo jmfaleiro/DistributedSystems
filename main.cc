@@ -143,6 +143,9 @@ NetSocket::NetSocket()
 	
 }
 
+
+// After receiving a time-out from the antientropy timer, send 
+// my vector clock to a random neighbor.
 void NetSocket::processAntiEntropyTimeout()
 {
   int index = qrand() % (neighbors->count());
@@ -229,6 +232,10 @@ bool NetSocket::bind()
 	return false;
 }
 
+
+// Received a message from the dialog.
+// Construct the message as a QVariantMap and 
+// call the function to handle received rumors.
 void NetSocket::gotSendMessage(const QString &s)
 {
 
@@ -251,6 +258,9 @@ void NetSocket::gotSendMessage(const QString &s)
 
 }
 
+
+// Send status message to the given address:port combination.
+// Reads the current state of the vector clock.
 void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
 {
   QVariantMap *udpBodyAsMap = new QVariantMap();
@@ -267,6 +277,19 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
   
 }
 
+// We might have received a new rumor.
+// a) If it is from the dialog, then it is definitely new.
+//
+// b) If it is from the network, then it might not be new,
+//    we have to account for this by checking the expected 
+//    value from the vector clock with the sequence number
+//    in the message.
+//
+// c) If we have a new message, start rumor mongering.
+// 
+// d) Only this function manipulates the vector clock and messages.
+//
+// e) Only this function sets anythingHot to true.
 void NetSocket::newRumor(const QVariantMap& readmessage,const  QHostAddress& senderAddress,const quint16& port)
 {
 
@@ -332,6 +355,10 @@ void NetSocket::newRumor(const QVariantMap& readmessage,const  QHostAddress& sen
   }
 }
 
+
+// Some utility methods to keep track of which neighbors we have already sent 
+// messages to for the same hotmessage. If we change hotmessages, then we have to clean up!!!
+// WE ONLY CLEAN UP IN newRumor!!!
 void NetSocket::excludeNeighbor(quint32 port)
 {
   for (int i = 0; i < neighbors->count(); ++i){
@@ -403,6 +430,15 @@ QString NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap
   return "";
 }
 
+// Called when we receive a new status message.
+// 
+// Handles *both* messages due to rumor mongering and anti-entropy.
+//
+// a) If we have nothing hot, then it's safe to rumor monger
+//    with just the host that sent us the status message.
+//
+// b) If anythingHot is true, we have to make sure that we also accommodate for
+//    rumormongering with all neighbors.
 
 void NetSocket::newStatus(const QVariantMap& message,
 			   const QHostAddress& senderAddress, 
@@ -478,7 +514,7 @@ void NetSocket::newStatus(const QVariantMap& message,
 }
   
 
-
+// Rumormongering timeout.
 void NetSocket::processTimeout()
 {
   int index;
@@ -503,6 +539,9 @@ void NetSocket::processTimeout()
     }
   }
 }
+
+// Read data from the network and redirect the message for analysis to 
+// either newRumor or newStatus.
 
 void NetSocket::readData()
 {
