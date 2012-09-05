@@ -9,27 +9,9 @@
 #include <QDataStream>
 #include <QByteArray>
 #include <QVariant>
-
-
-
-class MessageSender : public QObject
-{
-
-  Q_OBJECT
-
-public: 
-  MessageSender();
-
-public slots:
-  void gotSendMessage (const QString &s);
-  void gotReceivedMessage (const QByteArray &arr);
-  
-signals:
-  void sendMessage(const QByteArray &arr);
-  void receivedMessage (const QString &s);
-
-};
-
+#include <QPair>
+#include <QList>
+#include <QTimer>
 
 
 class TextEntryWidget : public QTextEdit
@@ -81,16 +63,57 @@ public:
 	bool bind();
 
 public slots:
-  void gotSendMessage(const QByteArray &datagram);
+  void gotSendMessage(const QString &s);
   void readData();
+  void processTimeout();
+  void processAntiEntropyTimeout();
 
 signals:
-  void newData(const QByteArray& data);
+  void receivedMessage(const QString& data);
+  void startRumorTimer(int msec);
+  
+
 
 private:
-	int myPortMin, myPortMax;
-  QHostAddress * me;
-};
+  void newRumor(const QVariantMap& message,const QHostAddress& senderAddress,const quint16& port);
+  void newStatus(const QVariantMap& message,
+			    const QHostAddress& senderAddress, 
+			    const quint16& port);
 
+  void sendStatusMessage(QHostAddress address, quint16 port);  
+
+  //  void serializeMap(const QVariantMap& m, QByteArray *arr);
+
+  void deserializeMap(const QByteArray& arr, QVariantMap* m);
+
+  QString tryFindFirstBigger(const QVariantMap& map1,const QVariantMap& map2, int *required);
+  
+  int randomNeighbor();
+  void cleanUpVisited();
+  void excludeNeighbor(quint32 port);
+
+  
+  QByteArray *EMPTY_BYTE_ARRAY;
+  
+  int myPortMin, myPortMax;
+  QHostAddress *localhost;
+  QPair<QHostAddress, quint16> *me;
+  QVariant *myNameVariant;
+  QString myNameString;
+
+  QTimer *rumorTimer;
+  QTimer *antiEntropyTimer;
+  QMap<QString, QList<QByteArray> > *messages;
+  
+  QVariantMap hotMessage;
+  QSet<quint32> *neighborsVisited;
+  bool anythingHot;
+  
+
+  QList<QPair<QHostAddress, quint16> > *neighbors;
+  QVariantMap *vectorClock;
+  quint32 messageIdCounter;
+  
+};
 
 #endif // PEERSTER_MAIN_HH
