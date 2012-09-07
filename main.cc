@@ -574,12 +574,15 @@ bool NetSocket::checkIfWellFormedIP(const QString& addr)
       
       parts[i].toInt(&ret);
       
-      if (!ret)
+      if (!ret){
+	qDebug() << "The IP address " << addr << " is not well formed!!!";
 	return ret;
+      }
     }
 
   }
-
+  
+  qDebug() << "The IP address " << addr << " is well formed!!!";
   return ret;
 	
 }
