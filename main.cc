@@ -6,7 +6,6 @@
 #include <QDebug>
 #include <QKeyEvent>
 #include <QTextStream>
-#include <QHostInfo>
 #include <QtGlobal>
 #include "main.hh"
 
@@ -51,10 +50,15 @@ ChatDialog::ChatDialog()
 	textline = new TextEntryWidget(this);
 	textline->setFocus();
 
+	
+	peerAdder = new QLineEdit(this);
+	
+
 	// Lay out the widgets to appear in the main window.
 	// For Qt widget and layout concepts see:
 	// http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
 	QVBoxLayout *layout = new QVBoxLayout();
+	layout->addWidget(peerAdder);
 	layout->addWidget(textview);
 	layout->addWidget(textline);
 	setLayout(layout);
@@ -67,10 +71,17 @@ ChatDialog::ChatDialog()
 		this, SLOT(gotReturnPressed()));
 
 
+	connect(peerAdder, SIGNAL(returnPressed()),
+		this, SLOT(gotAddPeer()));
 	
 }
 
-
+void ChatDialog::gotAddPeer()
+{
+  QString temp = peerAdder->text();
+  peerAdder->clear();
+  emit this->addPeer(temp); 
+}
 
 void ChatDialog::gotReturnPressed()
 {
@@ -113,7 +124,8 @@ NetSocket::NetSocket()
 	vectorClock = new QVariantMap();
 	
 	messageIdCounter = 1;
-
+	
+	pendingLookups = new QMap<QString, QList<quint16> >();
 
 	neighborsVisited = new QSet<quint32>();
 	messages = new QMap<QString, QList<QByteArray> >();
@@ -123,6 +135,7 @@ NetSocket::NetSocket()
 	antiEntropyTimer = new QTimer();
 	antiEntropyTimer->setSingleShot(false);
 	antiEntropyTimer->start(10000);
+	
 	
 
 	EMPTY_BYTE_ARRAY = new QByteArray();
@@ -153,6 +166,8 @@ void NetSocket::processAntiEntropyTimeout()
   sendStatusMessage((*neighbors)[index].first, (*neighbors)[index].second);
 }
 
+
+
 bool NetSocket::bind()
 {
 	// Try to bind to each of the range myPortMin..myPortMax in turn.
@@ -165,9 +180,29 @@ bool NetSocket::bind()
 		if (QUdpSocket::bind(p)) {
 			qDebug() << "bound to UDP port " << p;
 
+			QHostInfo myInformation = QHostInfo::fromName(QHostInfo::localHostName());
+			QList<QHostAddress> myAddresses = myInformation.addresses();
+			
+			for(int i = 0; i < myAddresses.count(); ++i){
+			  
+
+			  if (myAddresses[i].toString() != "127.0.0.1"){
+			    
+			    if (checkIfWellFormedIP(myAddresses[i].toString())){
+				myIP = myAddresses[i].toString();
+				qDebug() << "found my address!!!";
+				qDebug() << myIP;
+			      
+			      }
+			  }
+			}
+
+			
+			
 			neighbors = new QList<QPair<QHostAddress, quint16> >();
 			QPair<QHostAddress, quint16>* ahead;
 			QPair<QHostAddress, quint16>* behind;
+			
 			
 
 			if (p == qMyPortMin){
@@ -175,8 +210,7 @@ bool NetSocket::bind()
 			  ahead = new QPair<QHostAddress, quint16>(*localhost, p + 1);
 			  neighbors->append(*ahead);
 			  me = new QPair<QHostAddress, quint16>(*localhost, p);
-
-
+			  
 			}
 
 			else if (p == qMyPortMin + 1){
@@ -213,7 +247,28 @@ bool NetSocket::bind()
 
 			  me = new QPair<QHostAddress, quint16>(*localhost, p);
 			}
+
 			
+
+			/*
+			for (quint16 q = qMyPortMin; q <= qMyPortMax; q++) {
+			  
+			  if (p != q)			    
+			    neighbors->append(*localhost, q);
+			  			  
+			}
+			*/
+
+			
+
+			QStringList args = QCoreApplication::arguments();
+			
+			int max = args.count();
+			for(int i = 1; i < max; ++i){
+			  
+			  qDebug() << args[i];			  
+			  addHost(args[i]);
+			}
 			
 			QTextStream *stream = new QTextStream(&myNameString);
 			
@@ -430,6 +485,141 @@ QString NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap
   return "";
 }
 
+void NetSocket::addHost(const QString& s)
+{
+  
+  QPair<QHostAddress, quint16> peer;
+  
+  QStringList parts = s.split(":");
+  if (parts.count() != 2){
+    qDebug() << "NetSocket::AddHost didn't receive the right format, expected \"(ipaddr|hostname):port\"";
+    return;
+  }
+
+  bool correct;
+  quint32 port = parts[2].toUInt(&correct);
+  if (!correct){
+    
+    qDebug() << "NetSocket::AddHost received invalid port";
+    return;
+  }
+
+  QHostAddress* addr = new QHostAddress();
+
+  // Success, we parsed the ip address and we're done!
+  // Make sure that we don't add the same host:port combination twice!!!
+  if (addr->setAddress(parts[1])){
+    
+    if (parts[1] != myIP){
+      for(int i = 0; i < neighbors->count(); ++i){
+      
+	// Check if we've already added this host before.
+	if (((*neighbors)[i].first == *addr) && ((*neighbors)[i].second == port)){
+	
+	  qDebug() << "NetSocket::addHost -- already added " << addr->toString() << ":" << port;
+	  addr->~QHostAddress();
+	  return;	  
+	}
+      }
+
+      peer = *(new QPair<QHostAddress, quint16>(*addr, (quint16)port));
+      (*neighbors).append(peer);
+    }
+
+  }
+  
+  // The ip address wasn't properly parsed, maybe it's a hostname?
+  else{
+
+
+    if (pendingLookups->contains(parts[1])){
+      
+      if ((*pendingLookups)[parts[1]].indexOf(port) >= 0){
+
+	return;
+      }
+
+      else{
+	
+	(*pendingLookups)[parts[1]].append(port);
+	return;
+      }
+
+    }
+
+    else {
+      
+      (*pendingLookups)[parts[1]] = *(new QList<quint16>());
+      (*pendingLookups)[parts[1]].append(port);
+
+      QHostInfo::lookupHost(parts[1], this, SLOT(lookedUpHost(const QHostInfo&)));
+      return;
+    }
+    
+  }  
+  
+}
+
+bool NetSocket::checkIfWellFormedIP(const QString& addr)
+{
+  
+  QStringList parts = addr.split('.');
+  
+  bool ret = false;
+  if (parts.count() == 4){
+    
+    for(int i = 0; i < 4; ++i){
+      
+      parts[i].toInt(&ret);
+      
+      if (!ret)
+	return ret;
+    }
+
+  }
+
+  return ret;
+	
+}
+
+// Taken from qt documentation on how to use QHostInfo to 
+// lookup a host's ip address.
+void NetSocket::lookedUpHost(const QHostInfo& host)
+{
+  if (host.error() != QHostInfo::NoError) {
+    qDebug() << "NetSocket::lookedUpHost -- lookup failed for " << host.hostName();
+
+  }
+
+  else {
+    
+    if (!host.addresses().isEmpty()){
+      
+      for(int i = 0; i < host.addresses().count(); ++i){
+	
+	QHostAddress curr = host.addresses()[i];
+	
+	if (checkIfWellFormedIP(curr.toString())){
+	  
+	  if (myIP != curr.toString() && "127.0.0.1" != curr.toString()){
+	    
+	    for(int i = 0; i < (*pendingLookups)[host.hostName()].count(); ++i){
+	    
+	      QPair<QHostAddress, quint16> *peer = new QPair<QHostAddress, quint16>(curr, 
+										    (*pendingLookups)[host.hostName()][i]);
+	      neighbors->append(*peer);
+	    }
+	  
+	  }
+	}
+
+      }
+    }
+
+  }
+  pendingLookups->remove(host.hostName());
+}
+
 // Called when we receive a new status message.
 // 
 // Handles *both* messages due to rumor mongering and anti-entropy.
@@ -563,7 +753,23 @@ void NetSocket::readData()
 
   qDebug() << "NetSocket::readData() -- just received a datagram!!!";
 
+  bool seenBefore;
+  for(int i = 0; i < neighbors->count(); ++i){
+    
+    if((*neighbors)[i].first.toString() == (*senderAddress).toString() && 
+       (*neighbors)[i].second == port){
+      
+      qDebug() << "NetSocket::readData() -- seen this host before!!!";
+      seenBefore = true;
+      break;
+    }      
+  }
 
+  if (!seenBefore){
+    
+    QPair<QHostAddress, quint16> *peer = new QPair<QHostAddress, quint16>(*senderAddress, port);
+    neighbors->append(*peer);    
+  }
   
 
   QByteArray *arr = new QByteArray(data, size);
@@ -626,7 +832,8 @@ int main(int argc, char **argv)
 			 &dialog, SLOT(gotNewMessage(const QString&)));
 
 
-	
+	QObject::connect(&dialog, SIGNAL(addPeer(const QString&)),
+			 &sock, SLOT(addHost(const QString&)));
 
 			 
 
