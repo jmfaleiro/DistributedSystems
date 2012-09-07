@@ -80,6 +80,7 @@ void ChatDialog::gotAddPeer()
 {
   QString temp = peerAdder->text();
   peerAdder->clear();
+  qDebug() << "ChatDialog::gotAddPeer -- received request to add " << temp;
   emit this->addPeer(temp); 
 }
 
@@ -487,7 +488,7 @@ QString NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap
 
 void NetSocket::addHost(const QString& s)
 {
-  
+  qDebug() << "NetSocket::addHost -- at least I got called";
   QPair<QHostAddress, quint16> peer;
   
   QStringList parts = s.split(":");
@@ -497,20 +498,21 @@ void NetSocket::addHost(const QString& s)
   }
 
   bool correct;
-  quint32 port = parts[2].toUInt(&correct);
+  quint32 port = parts[1].toUInt(&correct);
   if (!correct){
     
     qDebug() << "NetSocket::AddHost received invalid port";
     return;
   }
 
+  qDebug() << "NetSocket::addHost -- got a well formed addresss!!!";
   QHostAddress* addr = new QHostAddress();
 
   // Success, we parsed the ip address and we're done!
   // Make sure that we don't add the same host:port combination twice!!!
-  if (addr->setAddress(parts[1])){
+  if (addr->setAddress(parts[0])){
     
-    if (parts[1] != myIP){
+    if (parts[0] != myIP){
       for(int i = 0; i < neighbors->count(); ++i){
       
 	// Check if we've already added this host before.
@@ -532,16 +534,16 @@ void NetSocket::addHost(const QString& s)
   else{
 
 
-    if (pendingLookups->contains(parts[1])){
+    if (pendingLookups->contains(parts[0])){
       
-      if ((*pendingLookups)[parts[1]].indexOf(port) >= 0){
+      if ((*pendingLookups)[parts[0]].indexOf(port) >= 0){
 
 	return;
       }
 
       else{
 	
-	(*pendingLookups)[parts[1]].append(port);
+	(*pendingLookups)[parts[0]].append(port);
 	return;
       }
 
@@ -549,10 +551,10 @@ void NetSocket::addHost(const QString& s)
 
     else {
       
-      (*pendingLookups)[parts[1]] = *(new QList<quint16>());
-      (*pendingLookups)[parts[1]].append(port);
+      (*pendingLookups)[parts[0]] = *(new QList<quint16>());
+      (*pendingLookups)[parts[0]].append(port);
 
-      QHostInfo::lookupHost(parts[1], this, SLOT(lookedUpHost(const QHostInfo&)));
+      QHostInfo::lookupHost(parts[0], this, SLOT(lookedUpHost(const QHostInfo&)));
       return;
     }
     
