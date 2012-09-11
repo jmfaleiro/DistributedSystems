@@ -162,9 +162,13 @@ NetSocket::NetSocket()
 // my vector clock to a random neighbor.
 void NetSocket::processAntiEntropyTimeout()
 {
-  int index = qrand() % (neighbors->count());
+  if (neighbors->count() > 0){
+    
+    int index = qrand() % (neighbors->count());
   
-  sendStatusMessage((*neighbors)[index].first, (*neighbors)[index].second);
+  
+    sendStatusMessage((*neighbors)[index].first, (*neighbors)[index].second);
+  }
 }
 
 
@@ -198,19 +202,19 @@ bool NetSocket::bind()
 			  }
 			}
 
-			
+			qDebug() << "something";
 			
 			neighbors = new QList<QPair<QHostAddress, quint16> >();
 			QPair<QHostAddress, quint16>* ahead;
 			QPair<QHostAddress, quint16>* behind;
 			
-			
-
+			me = new QPair<QHostAddress, quint16>(*localhost, p);	
+			/*
 			if (p == qMyPortMin){
 			  
 			  ahead = new QPair<QHostAddress, quint16>(*localhost, p + 1);
 			  neighbors->append(*ahead);
-			  me = new QPair<QHostAddress, quint16>(*localhost, p);
+		
 			  
 			}
 
@@ -222,7 +226,7 @@ bool NetSocket::bind()
 			  neighbors->append(*ahead);
 			  neighbors->append(*behind);
 
-			  me = new QPair<QHostAddress, quint16>(*localhost, p);
+
 
 
 			}
@@ -235,7 +239,7 @@ bool NetSocket::bind()
 			  neighbors->append(*ahead);
 			  neighbors->append(*behind);
 			   
-			  me = new QPair<QHostAddress, quint16>(*localhost, p);
+
 
 
 			}
@@ -246,9 +250,9 @@ bool NetSocket::bind()
 
 			  neighbors->append(*behind);
 
-			  me = new QPair<QHostAddress, quint16>(*localhost, p);
-			}
 
+			}
+			*/
 			
 
 			/*
@@ -273,12 +277,12 @@ bool NetSocket::bind()
 			
 			QTextStream *stream = new QTextStream(&myNameString);
 			
-			(*stream) << QHostInfo::localHostName() << ":" << p;
+			(*stream) << QHostInfo::localHostName() << ":" << p << qrand();
 			
 			myNameVariant = new QVariant(myNameString);
 			
 			stream->~QTextStream();
-			
+			qDebug() << "Finished intialization!!!";
 			return true;
 		}
 	}
@@ -330,6 +334,7 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
   (*s) << (*udpBodyAsMap);
     
   this->writeDatagram(*arr, address, port);
+  qDebug() << "NetSocket:sendStatusMessage -- finished sending status!";
   
 }
 
@@ -389,9 +394,9 @@ void NetSocket::newRumor(const QVariantMap& readmessage,const  QHostAddress& sen
     }
   
     // Make sure we don't send the message back to the origin:
-    QStringList temp = origin.split(":");
+    //QStringList temp = origin.split(":");
     
-    excludeNeighbor(temp[1].toUInt());
+    //excludeNeighbor(temp[1].toUInt());
 
     anythingHot = true;
     
@@ -435,6 +440,9 @@ void NetSocket::cleanUpVisited()
 int NetSocket::randomNeighbor()
 {
   
+  if (neighbors->count() == 0){
+    return -1;
+  }
   if (neighbors->count() == neighborsVisited->count()){
     return -1;
   }
@@ -643,6 +651,8 @@ void NetSocket::newStatus(const QVariantMap& message,
   QString ans;
   int required;
 
+  
+  
   qDebug() << "NetSocket::newStatus " << message["Want"];
 
   // Our vector is bigger!!!
