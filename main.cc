@@ -326,14 +326,14 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
 {
   QVariantMap *udpBodyAsMap = new QVariantMap();
   
-  qDebug() << "NetSocker::sendStatusMessage " << *vectorClock;
+
   (*udpBodyAsMap)["Want"] = *vectorClock;
 
   QByteArray *arr = new QByteArray();
   
   QDataStream *s = new QDataStream(arr, QIODevice::Append);
   (*s) << (*udpBodyAsMap);
-    
+  qDebug() << "NetSocker::sendStatusMessage " << (*udpBodyAsMap)["Want"];
   this->writeDatagram(*arr, address, port);
   qDebug() << "NetSocket:sendStatusMessage -- finished sending status to " << address << " " << port;
   
@@ -359,13 +359,22 @@ void NetSocket::newRumor(const QVariantMap& readmessage,const  QHostAddress& sen
   QString origin = readmessage["Origin"].toString();
   
 
-  quint32 expected = (vectorClock->contains(origin))? (*vectorClock)[origin].toUInt() : 1;
-    
-  if (vectorClock->contains(origin))
-    expected = (*vectorClock)[origin].toUInt();
-  else
-    expected = 1;
+  quint32 expected;
   
+  
+  
+  if (vectorClock->contains(origin)){
+
+    
+    expected = (*vectorClock)[origin].toUInt();
+    qDebug() << "NetSocket::newRumor -- Contain entry for " << origin << " expect " << expected;
+  }
+  else{
+    expected = 1;
+    qDebug() << "NetSocket::newRumor -- Don't contain entry for " << origin << " expect " << 1;
+  }
+  
+  qDebug() << "NetSocket::newRumor -- got " << " " << readmessage["SeqNo"].toUInt();
   
   if (expected == readmessage["SeqNo"].toUInt()){
         
@@ -712,13 +721,8 @@ void NetSocket::newStatus(const QVariantMap& message,
     else if ((ans = tryFindFirstBigger(message["Want"].toMap(), *vectorClock, &required)) != ""){
     
       qDebug() << "NetSocket::newStatus -- her's is bigger!!!";
-      QVariantMap *temp = new QVariantMap();
-      (*temp)["Want"] = *vectorClock;
-      QByteArray *arr = new QByteArray();
-      QDataStream *stream = new QDataStream(arr, QIODevice::Append);
-    
-      (*stream) << (*temp);    
-      this->writeDatagram(*arr, senderAddress, port);    
+
+      sendStatusMessage(senderAddress, port);
       qDebug() << "NetSocket::newStatus -- wrote our status!!!";
       qDebug() << '\n';
     }  
@@ -840,18 +844,24 @@ void NetSocket::readData()
 
   // Rumor message:
   if (items->contains("ChatText") && 
-      items->contains("Origin") &&
-      items->contains("SeqNo") &&
-      !(items->contains("Want"))){
+
+      !items->contains("Want")){
+   
+    if (items->contains("Origin") && 
+	items->contains("SeqNo")){
+      qDebug() << "Rumor!!!";
+      newRumor(*items, *senderAddress, port);
+    }
     
-    qDebug() << "Rumor!!!";
-    newRumor(*items, *senderAddress, port);
+    else {
+      
+      qDebug() << "NetSocket::readMessage() -- malformed rumor message";
+    }
   }
 
   // Status message:
-  else if (items->contains("Want") && !(items->contains("ChatText") ||
-					items->contains("Origin") ||
-					items->contains("SeqNo"))){
+  else if (items->contains("Want") && !(items->contains("ChatText"))){
+					
 
     qDebug() << "Status!!!";
     newStatus(*items, *senderAddress, port);
