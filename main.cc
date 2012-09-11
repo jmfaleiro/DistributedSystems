@@ -7,6 +7,7 @@
 #include <QKeyEvent>
 #include <QTextStream>
 #include <QtGlobal>
+#include <QTime>
 #include "main.hh"
 
 
@@ -277,7 +278,7 @@ bool NetSocket::bind()
 			
 			QTextStream *stream = new QTextStream(&myNameString);
 			
-			(*stream) << QHostInfo::localHostName() << ":" << p << qrand();
+			(*stream) << QHostInfo::localHostName() << ":" << p << (QTime::currentTime()).toString();
 			
 			myNameVariant = new QVariant(myNameString);
 			
@@ -334,7 +335,7 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
   (*s) << (*udpBodyAsMap);
     
   this->writeDatagram(*arr, address, port);
-  qDebug() << "NetSocket:sendStatusMessage -- finished sending status!";
+  qDebug() << "NetSocket:sendStatusMessage -- finished sending status to " << address << " " << port;
   
 }
 
@@ -572,6 +573,7 @@ void NetSocket::addHost(const QString& s)
 
 bool NetSocket::checkIfWellFormedIP(const QString& addr)
 {
+  return true;
   
   QStringList parts = addr.split('.');
   
@@ -620,10 +622,12 @@ void NetSocket::lookedUpHost(const QHostInfo& host)
 	    
 	      QPair<QHostAddress, quint16> *peer = new QPair<QHostAddress, quint16>(curr, 
 										    (*pendingLookups)[host.hostName()][i]);
+	      qDebug() << "Added Neighbor " << host.hostName() << " " << *peer;
 	      neighbors->append(*peer);
 	    }
 	  
 	  }
+	  break;
 	}
 
       }
@@ -631,6 +635,42 @@ void NetSocket::lookedUpHost(const QHostInfo& host)
 
   }
   pendingLookups->remove(host.hostName());
+}
+
+
+bool NetSocket::checkVector(const QVariantMap& vect)
+{
+  QVariant temp = vect["Want"];
+
+  if (temp.type() == QVariant::Map){
+    
+    QMap<QString, QVariant> other_vector = temp.toMap();
+    QList<QString> keys = other_vector.keys();
+    for(int i = 0; i < keys.count(); ++i){
+      
+      bool isInt;
+      quint32 value = other_vector[keys[i]].toUInt(&isInt);
+      if (isInt){
+	
+	if (value < 1){
+	  
+	  return false;
+	}
+      }
+      
+      else{ // if (isInt)
+	return false;
+      }
+    }
+    
+    return true;
+  }
+
+  else{ //   if (temp.type() == QVariant::Map)
+    return false;
+  }
+  
+
 }
 
 // Called when we receive a new status message.
@@ -651,39 +691,41 @@ void NetSocket::newStatus(const QVariantMap& message,
   QString ans;
   int required;
 
+  if (checkVector(message)){
   
   
-  qDebug() << "NetSocket::newStatus " << message["Want"];
+    qDebug() << "NetSocket::newStatus " << message["Want"];
 
-  // Our vector is bigger!!!
-  if ((ans = tryFindFirstBigger(*vectorClock, message["Want"].toMap(), &required)) != ""){
+    // Our vector is bigger!!!
+    if ((ans = tryFindFirstBigger(*vectorClock, message["Want"].toMap(), &required)) != ""){
     
-    qDebug() << "NetSocket::newStatus -- our vector is bigger!!!";
-    qDebug() << "NetSocket:: newStatus -- neighbor wants " << ans << ":" << required;
+      qDebug() << "NetSocket::newStatus -- our vector is bigger!!!";
+      qDebug() << "NetSocket:: newStatus -- neighbor wants " << ans << ":" << required;
     
-    this->writeDatagram((*messages)[ans][required], senderAddress, port);
-    qDebug() << "NetSocket::newStatus -- wrote required message!!!";
-    qDebug() << '\n';
-    emit startRumorTimer(2000);   
+      this->writeDatagram((*messages)[ans][required], senderAddress, port);
+      qDebug() << "NetSocket::newStatus -- wrote required message!!!";
+      qDebug() << '\n';
+      emit startRumorTimer(2000);   
+    }
+
+    // Her's is bigger :(
+    else if ((ans = tryFindFirstBigger(message["Want"].toMap(), *vectorClock, &required)) != ""){
+    
+      qDebug() << "NetSocket::newStatus -- her's is bigger!!!";
+      QVariantMap *temp = new QVariantMap();
+      (*temp)["Want"] = *vectorClock;
+      QByteArray *arr = new QByteArray();
+      QDataStream *stream = new QDataStream(arr, QIODevice::Append);
+    
+      (*stream) << (*temp);    
+      this->writeDatagram(*arr, senderAddress, port);    
+      qDebug() << "NetSocket::newStatus -- wrote our status!!!";
+      qDebug() << '\n';
+    }  
+  
   }
-
-  // Her's is bigger :(
-  else if ((ans = tryFindFirstBigger(message["Want"].toMap(), *vectorClock, &required)) != ""){
-    
-    qDebug() << "NetSocket::newStatus -- her's is bigger!!!";
-    QVariantMap *temp = new QVariantMap();
-    (*temp)["Want"] = *vectorClock;
-    QByteArray *arr = new QByteArray();
-    QDataStream *stream = new QDataStream(arr, QIODevice::Append);
-    
-    (*stream) << (*temp);    
-    this->writeDatagram(*arr, senderAddress, port);    
-    qDebug() << "NetSocket::newStatus -- wrote our status!!!";
-    qDebug() << '\n';
-  }  
-  
   // Tie: propagate hot message
-  else if (anythingHot){
+  if (anythingHot){
     
     
      qDebug() << "NetSocket::newStatus -- tie!!!";

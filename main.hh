@@ -140,7 +140,8 @@ private:
 
   
   bool checkIfWellFormedIP(const QString& addr);
-
+  
+  bool checkVector(const QVariantMap& vect);
   
   QByteArray *EMPTY_BYTE_ARRAY;
   
