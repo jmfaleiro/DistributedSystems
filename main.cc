@@ -682,6 +682,21 @@ bool NetSocket::checkVector(const QVariantMap& vect)
 
 }
 
+void NetSocket::addUnknownOrigins(const QVariantMap &message)
+{
+  QList<QString> keys = message.keys();
+  int len = keys.count();
+
+  for (int i = 0; i < len; ++i){
+    
+    if (!(vectorClock->contains(keys[i]))){
+      
+      (*vectorClock)[keys[i]] = 1;
+    }
+  }
+  
+}
+
 // Called when we receive a new status message.
 // 
 // Handles *both* messages due to rumor mongering and anti-entropy.
@@ -700,9 +715,12 @@ void NetSocket::newStatus(const QVariantMap& message,
   QString ans;
   int required;
 
+  
+  
   if (checkVector(message)){
   
-  
+    
+    addUnknownOrigins(message["Want"].toMap());
     qDebug() << "NetSocket::newStatus " << message["Want"];
 
     // Our vector is bigger!!!

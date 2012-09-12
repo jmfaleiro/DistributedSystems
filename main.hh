@@ -142,7 +142,9 @@ private:
   bool checkIfWellFormedIP(const QString& addr);
   
   bool checkVector(const QVariantMap& vect);
-  
+  void addUnknownOrigins(const QVariantMap &message);
+
+
   QByteArray *EMPTY_BYTE_ARRAY;
   
   int myPortMin, myPortMax;
