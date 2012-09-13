@@ -129,7 +129,7 @@ NetSocket::NetSocket()
 	
 
 
-	neighborsVisited = new QSet<quint32>();
+
 
 
 
@@ -209,11 +209,11 @@ bool NetSocket::bind()
 			QPair<QHostAddress, quint16>* ahead;
 			QPair<QHostAddress, quint16>* behind;
 			
-			me = new QPair<QHostAddress, quint16>(localhost, p);	
+
 			
 			if (p == qMyPortMin){
 			  
-			  ahead = new QPair<QHostAddress, quint16>(localhost, p + 1);
+			  ahead = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p + 1);
 			  neighbors.append(*ahead);
 		
 			  
@@ -221,8 +221,8 @@ bool NetSocket::bind()
 
 			else if (p == qMyPortMin + 1){
 
-			  ahead = new QPair<QHostAddress, quint16>(localhost, p + 1);
-			  behind = new QPair<QHostAddress, quint16>(localhost, p - 1);
+			  ahead = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p + 1);
+			  behind = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p - 1);
 			  
 			  neighbors.append(*ahead);
 			  neighbors.append(*behind);
@@ -234,8 +234,8 @@ bool NetSocket::bind()
 
 			else if (p == qMyPortMin + 2){
 
-			  ahead = new QPair<QHostAddress, quint16>(localhost, p + 1);
-			  behind = new QPair<QHostAddress, quint16>(localhost, p - 1);
+			  ahead = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p + 1);
+			  behind = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p - 1);
 
 			  neighbors.append(*ahead);
 			  neighbors.append(*behind);
@@ -247,7 +247,7 @@ bool NetSocket::bind()
 
 			else if (p == qMyPortMin + 3){
 
-			  behind = new QPair<QHostAddress, quint16>(localhost, p - 1);
+			  behind = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p - 1);
 
 			  neighbors.append(*behind);
 
@@ -276,13 +276,13 @@ bool NetSocket::bind()
 			  addHost(args[i]);
 			}
 			
-			QTextStream *stream = new QTextStream(&myNameString);
+			QTextStream stream(&myNameString);
 			
-			(*stream) << QHostInfo::localHostName() << ":" << p << (QTime::currentTime()).toString();
+			stream << QHostInfo::localHostName() << ":" << p << (QTime::currentTime()).toString();
 			
-			myNameVariant = new QVariant(myNameString);
+			myNameVariant = QVariant(myNameString);
 			
-			stream->~QTextStream();
+
 			qDebug() << "Finished intialization!!!";
 			return true;
 		}
@@ -430,6 +430,7 @@ void NetSocket::newRumor(const QVariantMap& readmessage,const  QHostAddress& sen
 // Some utility methods to keep track of which neighbors we have already sent 
 // messages to for the same hotmessage. If we change hotmessages, then we have to clean up!!!
 // WE ONLY CLEAN UP IN newRumor!!!
+/*
 void NetSocket::excludeNeighbor(quint32 port)
 {
   for (int i = 0; i < neighbors.count(); ++i){
@@ -442,9 +443,11 @@ void NetSocket::excludeNeighbor(quint32 port)
   }
 }
 
+*/
+
 int NetSocket::randomNeighbor()
 {
-  
+  return qrand() % (neighbors.count());
 }
 
 // If none of the elements are bigger, the string is empty.

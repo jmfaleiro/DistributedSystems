@@ -145,8 +145,8 @@ private:
   QByteArray EMPTY_BYTE_ARRAY;
   
   int myPortMin, myPortMax;
-  QHostAddress localhost(QHostAddress::LocalHost);
-  QPair<QHostAddress, quint16> me;
+  //  QHostAddress localhost(QHostAddress::LocalHost);
+
   QVariant myNameVariant;
   QString myNameString;
   
