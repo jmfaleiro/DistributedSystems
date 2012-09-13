@@ -135,9 +135,6 @@ private:
   //
   // cleanUpVisited: empty the set and start over.
   int randomNeighbor();
-  void cleanUpVisited();
-  void excludeNeighbor(quint32 port);
-
   
   bool checkIfWellFormedIP(const QString& addr);
   
@@ -145,28 +142,28 @@ private:
   void addUnknownOrigins(const QVariantMap &message);
 
 
-  QByteArray *EMPTY_BYTE_ARRAY;
+  QByteArray EMPTY_BYTE_ARRAY;
   
   int myPortMin, myPortMax;
-  QHostAddress *localhost;
-  QPair<QHostAddress, quint16> *me;
-  QVariant *myNameVariant;
+  QHostAddress localhost(QHostAddress::LocalHost);
+  QPair<QHostAddress, quint16> me;
+  QVariant myNameVariant;
   QString myNameString;
   
   QString myIP;
   quint16 myPort;
   
-  QTimer *rumorTimer;
-  QTimer *antiEntropyTimer;
-  QMap<QString, QList<QByteArray> > *messages;
+  QTimer rumorTimer;
+  QTimer antiEntropyTimer;
+  QMap<QString, QList<QByteArray> > messages;
   
   QVariantMap hotMessage;
-  QSet<quint32> *neighborsVisited;
+
   bool anythingHot;
   
-  QMap<QString, QList<quint16> > *pendingLookups;
-  QList<QPair<QHostAddress, quint16> > *neighbors;
-  QVariantMap *vectorClock;
+  QMap<QString, QList<quint16> > pendingLookups;
+  QList<QPair<QHostAddress, quint16> > neighbors;
+  QVariantMap vectorClock;
   quint32 messageIdCounter;
   
 };
