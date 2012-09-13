@@ -8,6 +8,7 @@
 #include <QTextStream>
 #include <QtGlobal>
 #include <QTime>
+#include <QDateTime>
 #include "main.hh"
 
 
@@ -138,7 +139,7 @@ NetSocket::NetSocket()
 	antiEntropyTimer.setSingleShot(false);
 	antiEntropyTimer.start(10000);
 	
-	
+	qsrand((QDateTime::currentDateTime()).toTime_t());
 
 
 	QObject::connect(this, SIGNAL(readyRead()),
@@ -165,9 +166,10 @@ void NetSocket::processAntiEntropyTimeout()
 {
   if (neighbors.count() > 0){
     
-    int index = qrand() % (neighbors.count());
-  
-  
+    int r = qrand();
+    int index = r % (neighbors.count());
+    
+    qDebug() << r;
     sendStatusMessage((neighbors[index]).first, (neighbors[index]).second);
   }
 }
@@ -278,7 +280,7 @@ bool NetSocket::bind()
 			
 			QTextStream stream(&myNameString);
 			
-			stream << QHostInfo::localHostName() << ":" << p << (QTime::currentTime()).toString();
+			stream << QHostInfo::localHostName() << ":" << p << (QDateTime::currentDateTime()).toString();
 			
 			myNameVariant = QVariant(myNameString);
 			
@@ -447,7 +449,9 @@ void NetSocket::excludeNeighbor(quint32 port)
 
 int NetSocket::randomNeighbor()
 {
-  return qrand() % (neighbors.count());
+  int r = qrand();
+  qDebug() << r;
+  return r % (neighbors.count());
 }
 
 // If none of the elements are bigger, the string is empty.
