@@ -447,6 +447,8 @@ void NetSocket::excludeNeighbor(quint32 port)
 
 */
 
+
+
 int NetSocket::randomNeighbor()
 {
   int r = qrand();
@@ -823,7 +825,7 @@ void NetSocket::readData()
 
   qDebug() << "NetSocket::readData() -- just received a datagram!!!";
 
-  bool seenBefore;
+  bool seenBefore = false;
   for(int i = 0; i < neighbors.count(); ++i){
     
     if((neighbors[i]).first.toString() == senderAddress.toString() && 
@@ -838,7 +840,8 @@ void NetSocket::readData()
   if (!seenBefore){
     
     QPair<QHostAddress, quint16> peer(senderAddress, port);
-    neighbors.append(peer);    
+    neighbors.append(peer);
+    qDebug() << "Added neighbor " << senderAddress << " " << port;
   }
   
 
