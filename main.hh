@@ -14,7 +14,7 @@
 #include <QTimer>
 #include <QHostInfo>
 
-
+#include <neighbors.hh>
 
 class TextEntryWidget : public QTextEdit
 {
@@ -56,6 +56,7 @@ private:
 
 };
 
+
 class NetSocket : public QUdpSocket
 {
 	Q_OBJECT
@@ -82,7 +83,7 @@ public slots:
   // for antientropy.
   void processAntiEntropyTimeout();
 
-  void lookedUpHost(const QHostInfo& host);
+
 
   void addHost(const QString& s);
 
@@ -136,7 +137,7 @@ private:
   // cleanUpVisited: empty the set and start over.
   int randomNeighbor();
   
-  bool checkIfWellFormedIP(const QString& addr);
+
   
   bool checkVector(const QVariantMap& vect);
   void addUnknownOrigins(const QVariantMap &message);
@@ -161,8 +162,8 @@ private:
 
   bool anythingHot;
   
-  QMap<QString, QList<quint16> > pendingLookups;
-  QList<QPair<QHostAddress, quint16> > neighbors;
+  NeighborList neighborList;
+  
   QVariantMap vectorClock;
   quint32 messageIdCounter;
   
