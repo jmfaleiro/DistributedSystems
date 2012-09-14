@@ -9,6 +9,7 @@
 #include <QtGlobal>
 #include <QTime>
 #include <QDateTime>
+#include <QUuid>
 #include "main.hh"
 
 
@@ -280,7 +281,9 @@ bool NetSocket::bind()
 			
 			QTextStream stream(&myNameString);
 			
-			stream << QHostInfo::localHostName() << ":" << p << (QDateTime::currentDateTime()).toString();
+			stream << QUuid::createUuid();
+			
+			stream << (QDateTime::currentDateTime()).toTime_t();
 			
 			myNameVariant = QVariant(myNameString);
 			
