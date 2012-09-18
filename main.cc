@@ -140,8 +140,16 @@ NetSocket::NetSocket()
 	antiEntropyTimer.setSingleShot(false);
 	antiEntropyTimer.start(10000);
 	
+	routeRumorTimer.setSingleShot(false);
+	routeRumorTimer.start(60000);
+	
 	qsrand((QDateTime::currentDateTime()).toTime_t());
 
+	QObject::connect(&routeRumorTimer, SIGNAL(timeout()),
+			 this, SLOT(routeRumorTimeout()));
+	
+	QObject::connect(this, SIGNAL(startRouteRumorTimer(int)),
+			 &routeRumorTimer, SLOT(start(int)));
 
 	QObject::connect(this, SIGNAL(readyRead()),
 			 this, SLOT(readData()));
@@ -150,7 +158,7 @@ NetSocket::NetSocket()
 			 &rumorTimer, SLOT(start(int)));
 
 	QObject::connect(&rumorTimer, SIGNAL(timeout()),
-			 this, SLOT(processTimeout()));
+			 this, SLOT(newRumor()));
 	
 	
 	
@@ -158,6 +166,27 @@ NetSocket::NetSocket()
 			 this, SLOT(processAntiEntropyTimeout()));
 			 
 	
+}
+
+void NetSocket::routeRumorTimeout()
+{
+  QVariantMap udpBodyAsMap;
+  routeRumorTimer.stop();
+        
+  // Put the values in the map.
+  udpBodyAsMap["SeqNo"] = messageIdCounter++;
+  udpBodyAsMap["Origin"] = myNameString;
+    
+  if (updateVector(udpBodyAsMap, false)){
+    
+    newRumor();
+    emit startRouteRumorTimer(60000); 
+  }
+  
+  else {
+    qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
+    *((int *)NULL) = 1;
+  }  
 }
 
 
@@ -301,15 +330,17 @@ void NetSocket::gotSendMessage(const QString &s)
   
 
   
-  QByteArray arr;
-
-  QDataStream stream(&arr, QIODevice::Append);
-  stream << udpBodyAsMap;
+  if (updateVector(udpBodyAsMap, true)){
+        
+    newRumor();
+  }
   
-  newRumor(udpBodyAsMap, QHostAddress::LocalHost, 0);
+  else {
+    qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
+    *((int *)NULL) = 1;
+  }
 
 }
-
 
 // Send status message to the given address:port combination.
 // Reads the current state of the vector clock.
@@ -330,6 +361,69 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
   
 }
 
+
+
+bool
+NetSocket::expectedRumor(const QVariantMap& rumor, QString *origin, quint32* expected)
+{
+  *origin = rumor["Origin"].toString();
+  
+
+  if (vectorClock.contains(*origin)){
+
+    
+    *expected = (vectorClock[*origin]).toUInt();
+    qDebug() << "NetSocket::newRumor -- Contain entry for " << *origin << " expect " << *expected;
+  }
+  else{
+    *expected = 1;
+    qDebug() << "NetSocket::newRumor -- Don't contain entry for " << *origin << " expect " << 1;
+  }
+  
+  qDebug() << "NetSocket::newRumor -- got " << " " << rumor["SeqNo"].toUInt();
+  
+  return (*expected) == rumor["SeqNo"].toUInt();
+}
+
+bool 
+NetSocket::updateVector(const QVariantMap& rumor, bool isRumorMessage)
+{
+  QString origin;
+  quint32 expected;
+  if (expectedRumor(rumor, &origin, &expected)){
+    
+    QByteArray arr;
+      
+    QDataStream stream(&arr, QIODevice::Append);
+    stream << rumor;
+
+    anythingHot = true;
+    hotMessage = arr;
+      
+    qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
+      
+
+
+    vectorClock[origin] = expected + 1;
+	
+    if (expected == 1){
+      QList<QByteArray> temp;
+      messages[origin] = temp;
+      messages[origin].append(EMPTY_BYTE_ARRAY);
+    }
+    messages[origin].append(arr);
+
+    if (isRumorMessage){
+      emit receivedMessage ((rumor["ChatText"]).toString());    	
+    }
+    
+    
+    return true;
+  }
+  
+  return false;
+}
+
 // We might have received a new rumor.
 // a) If it is from the dialog, then it is definitely new.
 //
@@ -343,74 +437,17 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
 // d) Only this function manipulates the vector clock and messages.
 //
 // e) Only this function sets anythingHot to true.
-void NetSocket::newRumor(const QVariantMap& readmessage,const  QHostAddress& senderAddress,const quint16& port)
+void NetSocket::newRumor()
 {
 
-  rumorTimer.stop();
-  QString origin = readmessage["Origin"].toString();
+  rumorTimer.stop();  
   
+  if (anythingHot){
 
-  quint32 expected;
-  
-  
-  
-  if (vectorClock.contains(origin)){
-
-    
-    expected = (vectorClock[origin]).toUInt();
-    qDebug() << "NetSocket::newRumor -- Contain entry for " << origin << " expect " << expected;
-  }
-  else{
-    expected = 1;
-    qDebug() << "NetSocket::newRumor -- Don't contain entry for " << origin << " expect " << 1;
-  }
-  
-  qDebug() << "NetSocket::newRumor -- got " << " " << readmessage["SeqNo"].toUInt();
-  
-  if (expected == readmessage["SeqNo"].toUInt()){
-        
-    hotMessage = readmessage;
-
-    
-
-    QByteArray arr;
-    QDataStream s(&arr, QIODevice::Append);
-    s << hotMessage;
-
-    qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
-      
-    emit receivedMessage ((readmessage["ChatText"]).toString());    	
-
-    vectorClock[origin] = expected + 1;
-	
-    if (expected == 1){
-      QList<QByteArray> temp;
-      messages[origin] = temp;
-      messages[origin].append(EMPTY_BYTE_ARRAY);
-    }
-    messages[origin].append(arr);
-
-    if (origin != myNameString){
-      sendStatusMessage(senderAddress, port);
-    }
-  
-    // Make sure we don't send the message back to the origin:
-    //QStringList temp = origin.split(":");
-    
-    //excludeNeighbor(temp[1].toUInt());
-
-    anythingHot = true;
-    
     QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
-
     
-    this->writeDatagram(arr, neighbor.first, neighbor.second);   
-
-	          
+    this->writeDatagram(hotMessage, neighbor.first, neighbor.second);   
     emit startRumorTimer(2000);
-  
-
-    
   }
 }
 
@@ -587,13 +624,9 @@ void NetSocket::newStatus(const QVariantMap& message,
       QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
       
       qDebug() << "NetSocket::newStatus -- send to next neighbor!!!";
-      QByteArray arr;
-	
-      QDataStream stream(&arr, QIODevice::Append);
-      stream << hotMessage;
-
-
-      this->writeDatagram(arr, neighbor.first, neighbor.second);
+      
+      qDebug() << hotMessage;
+      this->writeDatagram(hotMessage, neighbor.first, neighbor.second);
       qDebug() << "NetSocket::newStatus -- sent message!!!";
       emit startRumorTimer(2000);
 
@@ -606,27 +639,6 @@ void NetSocket::newStatus(const QVariantMap& message,
   }
 }
   
-
-// Rumormongering timeout.
-void NetSocket::processTimeout()
-{
-
-  rumorTimer.stop();
-  if (anythingHot){
-
-
-
-    QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
-    QByteArray arr;
-
-    QDataStream stream(&arr, QIODevice::Append);
-    stream << hotMessage;
-	
-
-    this->writeDatagram(arr, neighbor.first, neighbor.second);
-    emit startRumorTimer(2000);
-  }
-}
 
 // Read data from the network and redirect the message for analysis to 
 // either newRumor or newStatus.
@@ -664,14 +676,21 @@ void NetSocket::readData()
 
 
   // Rumor message:
-  if (items.contains("ChatText") && 
-
-      !items.contains("Want")){
+  if (!items.contains("Want")){
    
+    router.processRumor(items, vectorClock, senderAddress, port);
     if (items.contains("Origin") && 
 	items.contains("SeqNo")){
+
+      
       qDebug() << "Rumor!!!";
-      newRumor(items, senderAddress, port);
+      
+      bool isRumorMessage = items.contains("ChatText");
+      if (updateVector(items, isRumorMessage)){
+	
+	sendStatusMessage(senderAddress, port);
+	newRumor();
+      }
     }
     
     else {
@@ -687,6 +706,14 @@ void NetSocket::readData()
     qDebug() << "Status!!!";
     newStatus(items, senderAddress, port);
     
+  }
+
+  
+  else {
+
+    
+    qDebug() << "Unexpected Message";
+    qDebug() << items;
   }
 	   
   qDebug() << '\n';
@@ -723,8 +750,8 @@ int main(int argc, char **argv)
 	QObject::connect(&dialog, SIGNAL(addPeer(const QString&)),
 			 &sock, SLOT(addHost(const QString&)));
 
-			 
-
+	QTimer::singleShot(0, &sock, SLOT(routeRumorTimeout()));		 
+	
 	// Enter the Qt main loop; everything else is event driven
 	return app.exec();
 }
