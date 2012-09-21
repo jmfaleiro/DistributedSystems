@@ -59,7 +59,7 @@ Router::receiveMessage(QVariantMap& msg)
   qDebug() << "Received: " << msg;
   
   QString destination = msg["Dest"].toString();
-  int hopLimit;
+  int hopLimit = msg["HopLimit"].toInt();
   
   if (destination == me){
     
@@ -68,9 +68,7 @@ Router::receiveMessage(QVariantMap& msg)
   
   else if (hopLimit > 0){
     
-    hopLimit = msg["HopLimit"].toInt() - 1;
-
-    if (hopLimit != 0){
+    if (--hopLimit != 0){
       
       msg["HopLimit"] = hopLimit;
       QPair<QHostAddress, quint16> dest = routingTable[destination];
