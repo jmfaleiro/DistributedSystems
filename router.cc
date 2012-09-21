@@ -19,20 +19,24 @@ Router::processRumor(const QVariantMap& rumor,
 		     const quint16 port)
 {
 
-  //qDebug() << rumor;
+
+    //qDebug() << rumor;
   QString origin = rumor["Origin"].toString();
   quint32 seqNo = rumor["SeqNo"].toInt();
+
+  if (origin != me){
   
-  bool neworg = !routingTable.contains(origin);
+    bool neworg = !routingTable.contains(origin);
 
   
-  if (neworg || currHighest[origin] < seqNo){
-    currHighest[origin] = seqNo;
-    routingTable[origin] = QPair<QHostAddress, quint16>(sender, port);
-  }
+    if (neworg || currHighest[origin] < seqNo){
+      currHighest[origin] = seqNo;
+      routingTable[origin] = QPair<QHostAddress, quint16>(sender, port);
+    }
   
-  if(neworg){
-    emit newOrigin(origin);  
+    if(neworg){
+      emit newOrigin(origin);  
+    }
   }
 }
 
