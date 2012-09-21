@@ -33,7 +33,20 @@ Router::processRumor(const QVariantMap& rumor,
       currHighest[origin] = seqNo;
       routingTable[origin] = QPair<QHostAddress, quint16>(sender, port);
     }
-  
+    
+    else if (rumor.contains("LastIP") && rumor.contains("LastPort")){
+
+      
+      if (seqNo == currHighest[origin]){
+	
+	
+	QHostAddress holeIP(rumor["LastIP"].toInt());
+	quint16 holePort = rumor["LastPort"].toInt();
+	routingTable[origin] = QPair<QHostAddress, quint16>(holeIP, holePort);
+      }
+    }
+	     
+    
     if(neworg){
       emit newOrigin(origin);  
     }
