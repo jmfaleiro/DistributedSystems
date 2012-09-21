@@ -13,8 +13,6 @@ Router::Router(NetSocket *socket, bool nf)
   noForward = nf;
 }
 
-
-
 void
 Router::processRumor(const QVariantMap& rumor, 
 		     const QHostAddress& sender,
@@ -23,9 +21,15 @@ Router::processRumor(const QVariantMap& rumor,
 
   //qDebug() << rumor;
   QString origin = rumor["Origin"].toString();
+  quint32 seqNo = rumor["SeqNo"].toInt();
+  
   bool neworg = !routingTable.contains(origin);
-    
-  routingTable[rumor["Origin"].toString()] = QPair<QHostAddress, quint16>(sender, port);
+
+  
+  if (neworg || currHighest[origin] < seqNo){
+    currHighest[origin] = seqNo;
+    routingTable[origin] = QPair<QHostAddress, quint16>(sender, port);
+  }
   
   if(neworg){
     emit newOrigin(origin);  

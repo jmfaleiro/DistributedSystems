@@ -796,18 +796,25 @@ void NetSocket::readData()
       items.contains("SeqNo")){
    
 
+    if (items.contains("LastIP") && items.contains("LastPort")){
+      
+      neighborList.addNeighbor(senderAddress, port);
+    }
 
-      qDebug() << "Rumor!!!";
-      qDebug() << items;
-      bool isRumorMessage = items.contains("ChatText");
-      if (updateVector(items, isRumorMessage)){
-	
+    router->processRumor(items, senderAddress, port);    
 
-	router->processRumor(items, senderAddress, port);
+    qDebug() << "Rumor!!!";
+    qDebug() << items;
+    
+    items["LastIP"] = senderAddress.toIPv4Address();
+    items["LastPort"] = port;
 
-	sendStatusMessage(senderAddress, port);
-	newRumor();
-      }
+    bool isRumorMessage = items.contains("ChatText");
+    if (updateVector(items, isRumorMessage)){
+
+      sendStatusMessage(senderAddress, port);
+      newRumor();
+    }
   }
 
 

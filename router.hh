@@ -21,8 +21,8 @@ public:
 
 void 
 processRumor(const QVariantMap& rumor, 
-	       const QHostAddress& sender,
-	       const quint16 port);
+     	       const QHostAddress& sender,
+     	       const quint16 port);
 
 public slots:
 
@@ -42,6 +42,7 @@ newOrigin(const QString& origin);
   
 private:
   QHash<QString, QPair<QHostAddress, quint16> > routingTable;
+  QHash<QString, quint32> currHighest;
   NetSocket *sock;
   QTimer timer;
   bool noForward;
