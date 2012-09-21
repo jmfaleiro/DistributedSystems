@@ -457,7 +457,7 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
   
   QDataStream s(&arr, QIODevice::Append);
   s << udpBodyAsMap;
-  qDebug() << "NetSocker::sendStatusMessage " << udpBodyAsMap["Want"];
+  //qDebug() << "NetSocker::sendStatusMessage " << udpBodyAsMap["Want"];
   this->writeDatagram(arr, address, port);
   //qDebug() << "NetSocket:sendStatusMessage -- finished sending status to " << address << " " << port;
   
@@ -502,7 +502,7 @@ NetSocket::updateVector(const QVariantMap& rumor, bool isRumorMessage)
     anythingHot = true;
     hotMessage = rumor;
       
-    qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
+    //qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
       
 
 
@@ -798,13 +798,16 @@ void NetSocket::readData()
 
     if (items.contains("LastIP") && items.contains("LastPort")){
       
-      neighborList.addNeighbor(senderAddress, port);
+      qDebug() << items;
+      QHostAddress holeIP(items["LastIP"].toInt());
+      quint16 holePort = items["LastPort"].toInt();
+      neighborList.addNeighbor(holeIP, holePort);
     }
 
     router->processRumor(items, senderAddress, port);    
 
-    qDebug() << "Rumor!!!";
-    qDebug() << items;
+    //qDebug() << "Rumor!!!";
+    //qDebug() << items;
     
     items["LastIP"] = senderAddress.toIPv4Address();
     items["LastPort"] = port;
