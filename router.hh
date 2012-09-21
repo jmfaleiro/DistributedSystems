@@ -37,7 +37,9 @@ signals:
 void 
 privateMessage(const QString&message, const QString &origin);
 
-
+void 
+newOrigin(const QString& origin);
+  
 private:
   QHash<QString, QPair<QHostAddress, quint16> > routingTable;
   NetSocket *sock;

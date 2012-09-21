@@ -36,7 +36,7 @@ class PrivateChatDialog : public QDialog
   externalMessageReceived(const QString& msg);
   
   void 
-  internalMessageReceived(const QString& msg);
+  internalMessageReceived();
 
 signals:
  
@@ -73,24 +73,28 @@ class ChatDialog : public QDialog
 	Q_OBJECT
 
 public:
-	ChatDialog();
+	ChatDialog(Router *r);
 
 public slots:
   void gotReturnPressed();
   void gotNewMessage(const QString& s);
   void gotAddPeer();
+  void addOrigin(const QString& org);
   void newPrivateMessage(const QString& message, const QString& from);
+  void openEmptyPrivateChat(QListWidgetItem* item);
 
 signals:
   void sendMessage (const QString& s);
   void addPeer (const QString& s);
-
+  void sendPrivateMessage(const QString& msg, const QString& dest);
+  
 private:
 	QTextEdit *textview;
 	TextEntryWidget *textline;
   QLineEdit *peerAdder;
   QListWidget *origins;
   
+  Router *router;
   QHash<QString, PrivateChatDialog*> privateChats;
 
 
@@ -106,7 +110,7 @@ public:
 
 	// Bind this socket to a Peerster-specific default port.
 	bool bind();
-
+		     Router *router;
 public slots:
   // This function communicates a new message from the dialog.
   void gotSendMessage(const QString &s);
@@ -213,7 +217,7 @@ private:
   QVariantMap vectorClock;
   quint32 messageIdCounter;
   
-  Router *router;
+
   
 };
 

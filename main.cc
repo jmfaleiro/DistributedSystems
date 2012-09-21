@@ -34,14 +34,18 @@ PrivateChatDialog::PrivateChatDialog(const QString& destination)
   QVBoxLayout *layout = new QVBoxLayout();
   layout->addWidget(textview);
   layout->addWidget(textentry);
+
+  connect(textentry, SIGNAL(returnPressed()),
+	  this, SLOT(internalMessageReceived()));
+  
   setLayout(layout);
 }
 
 void
-PrivateChatDialog::internalMessageReceived(const QString& msg)
+PrivateChatDialog::internalMessageReceived()
 {
-  
-  textview->append(textentry->text());
+  QString msg = textentry->text();
+  textview->append(msg);
   emit sendMessage(msg, m_destination);
   textentry->clear();
 }
@@ -80,8 +84,9 @@ void TextEntryWidget::keyPressEvent(QKeyEvent *e)
 
 // Begin: ChatDialog
 
-ChatDialog::ChatDialog()
+ChatDialog::ChatDialog(Router *r)
 {
+  router = r;
 	setWindowTitle("Peerster");
 
 	// Read-only text box where we display messages from everyone.
@@ -123,6 +128,9 @@ ChatDialog::ChatDialog()
 	
 	// Register a callback on the textline's returnPressed signal
 	// so that we can send the message entered by the user.
+	connect(router, SIGNAL(newOrigin(const QString&)),
+		this, SLOT(addOrigin(const QString&)));
+	
 	connect(textline, SIGNAL(returnPressed()),
 		this, SLOT(gotReturnPressed()));
 
@@ -130,13 +138,23 @@ ChatDialog::ChatDialog()
 	connect(peerAdder, SIGNAL(returnPressed()),
 		this, SLOT(gotAddPeer()));
 	
+	connect(origins, SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+		this, SLOT(openEmptyPrivateChat(QListWidgetItem*)));
+	
+}
+
+
+void 
+ChatDialog::addOrigin(const QString& origin)
+{
+  origins->addItem(origin);
 }
 
 void ChatDialog::gotAddPeer()
 {
   QString temp = peerAdder->text();
   peerAdder->clear();
-  qDebug() << "ChatDialog::gotAddPeer -- received request to add " << temp;
+  //qDebug() << "ChatDialog::gotAddPeer -- received request to add " << temp;
   emit this->addPeer(temp); 
 }
 
@@ -144,7 +162,7 @@ void ChatDialog::gotReturnPressed()
 {
 	// Initially, just echo the string locally.
 	// Insert some networking code here...
-  qDebug() << "FIX: send message to other peers: " << textline->toPlainText();
+  //qDebug() << "FIX: send message to other peers: " << textline->toPlainText();
   //textview->append(textline->toPlainText());
 
   emit this->sendMessage (textline->toPlainText());
@@ -157,7 +175,7 @@ void ChatDialog::gotReturnPressed()
 
 void ChatDialog::gotNewMessage(const QString& s)
 {
-  qDebug() << "ChatDialog::gotNewMessage -- ok, at least I get called" << '\n';
+  //qDebug() << "ChatDialog::gotNewMessage -- ok, at least I get called" << '\n';
   textview->append(s);
 }
 
@@ -175,8 +193,28 @@ void ChatDialog::newPrivateMessage(const QString& message, const QString& from)
     
     privChat = privateChats[from];
   }
+  
+  QObject::connect(privChat, SIGNAL(sendMessage(const QString&, const QString&)),
+		   router, SLOT(sendMessage(const QString&, const QString&)));
 
   privChat->externalMessageReceived(message);  
+}
+
+
+void
+ChatDialog::openEmptyPrivateChat(QListWidgetItem* item)
+{
+  PrivateChatDialog *privChat;
+  QString destination = item->text();
+  if (!privateChats.contains(destination)){
+    
+    privChat= new PrivateChatDialog(destination);
+    privateChats[destination] = privChat;
+    connect(privChat, SIGNAL(sendMessage(const QString&, const QString&)),
+	    router, SLOT(sendMessage(const QString&, const QString&)));
+    privChat->show();
+  }
+  
 }
 
 
@@ -256,7 +294,7 @@ void NetSocket::routeRumorTimeout()
   }
   
   else {
-    qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
+    //qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
     *((int *)NULL) = 1;
   }  
 }
@@ -289,7 +327,7 @@ bool NetSocket::bind()
   // host on different ports.
   for (quint16 p = qMyPortMin; p <= qMyPortMax; p++) {
 		if (QUdpSocket::bind(p)) {
-			qDebug() << "bound to UDP port " << p;
+			//qDebug() << "bound to UDP port " << p;
 
 			
 			/*
@@ -362,7 +400,7 @@ bool NetSocket::bind()
 			int max = args.count();
 			for(int i = 1; i < max; ++i){
 			  
-			  qDebug() << args[i];			  
+			  //qDebug() << args[i];			  
 			  addHost(args[i]);
 			}
 			
@@ -374,14 +412,16 @@ bool NetSocket::bind()
 			
 			myNameVariant = QVariant(myNameString);
 			
-
-			qDebug() << "Finished intialization!!!";
+			qDebug() << p;
+			
+			router->me = myNameString;
+			//qDebug() << "Finished intialization!!!";
 			return true;
 		}
 	}
 
-	qDebug() << "Oops, no ports in my default range " << myPortMin
-		<< "-" << myPortMax << " available";
+	//qDebug() << "Oops, no ports in my default range " << myPortMin
+  //<< "-" << myPortMax << " available";
 	return false;
 }
 
@@ -408,7 +448,7 @@ void NetSocket::gotSendMessage(const QString &s)
   }
   
   else {
-    qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
+    //qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
     *((int *)NULL) = 1;
   }
 
@@ -427,9 +467,9 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
   
   QDataStream s(&arr, QIODevice::Append);
   s << udpBodyAsMap;
-  qDebug() << "NetSocker::sendStatusMessage " << udpBodyAsMap["Want"];
+  //qDebug() << "NetSocker::sendStatusMessage " << udpBodyAsMap["Want"];
   this->writeDatagram(arr, address, port);
-  qDebug() << "NetSocket:sendStatusMessage -- finished sending status to " << address << " " << port;
+  //qDebug() << "NetSocket:sendStatusMessage -- finished sending status to " << address << " " << port;
   
 }
 
@@ -445,14 +485,14 @@ NetSocket::expectedRumor(const QVariantMap& rumor, QString *origin, quint32* exp
 
     
     *expected = (vectorClock[*origin]).toUInt();
-    qDebug() << "NetSocket::newRumor -- Contain entry for " << *origin << " expect " << *expected;
+    //qDebug() << "NetSocket::newRumor -- Contain entry for " << *origin << " expect " << *expected;
   }
   else{
     *expected = 1;
-    qDebug() << "NetSocket::newRumor -- Don't contain entry for " << *origin << " expect " << 1;
+    //qDebug() << "NetSocket::newRumor -- Don't contain entry for " << *origin << " expect " << 1;
   }
   
-  qDebug() << "NetSocket::newRumor -- got " << " " << rumor["SeqNo"].toUInt();
+  //qDebug() << "NetSocket::newRumor -- got " << " " << rumor["SeqNo"].toUInt();
   
   return (*expected) == rumor["SeqNo"].toUInt();
 }
@@ -472,7 +512,7 @@ NetSocket::updateVector(const QVariantMap& rumor, bool isRumorMessage)
     anythingHot = true;
     hotMessage = arr;
       
-    qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
+    //qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
       
 
 
@@ -553,14 +593,14 @@ QString NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap
     
     if (map2.contains(keys[i])){
       
-      //qDebug() << "NetSocket::tryFindFirstBigger -- first if ok";
+      ////qDebug() << "NetSocket::tryFindFirstBigger -- first if ok";
       // both have the key, but map1's is higher: Success!!!
       if (map1[keys[i]].toUInt() > map2[keys[i]].toUInt()){
 	
 
 	*wanted = map2[keys[i]].toUInt();
 
-	//qDebug() << "NetSocket::tryFindFirstBigger -- inner if ok";
+	////qDebug() << "NetSocket::tryFindFirstBigger -- inner if ok";
 	return keys[i];
 
       }
@@ -658,28 +698,28 @@ void NetSocket::newStatus(const QVariantMap& message,
   
     
     addUnknownOrigins(message["Want"].toMap());
-    qDebug() << "NetSocket::newStatus " << message["Want"];
+    //qDebug() << "NetSocket::newStatus " << message["Want"];
 
     // Our vector is bigger!!!
     if ((ans = tryFindFirstBigger(vectorClock, message["Want"].toMap(), &required)) != ""){
     
-      qDebug() << "NetSocket::newStatus -- our vector is bigger!!!";
-      qDebug() << "NetSocket:: newStatus -- neighbor wants " << ans << ":" << required;
+      //qDebug() << "NetSocket::newStatus -- our vector is bigger!!!";
+      //qDebug() << "NetSocket:: newStatus -- neighbor wants " << ans << ":" << required;
     
       this->writeDatagram(messages[ans][required], senderAddress, port);
-      qDebug() << "NetSocket::newStatus -- wrote required message!!!";
-      qDebug() << '\n';
+      //qDebug() << "NetSocket::newStatus -- wrote required message!!!";
+      //qDebug() << '\n';
       emit startRumorTimer(2000);   
     }
 
     // Her's is bigger :(
     else if ((ans = tryFindFirstBigger(message["Want"].toMap(), vectorClock, &required)) != ""){
     
-      qDebug() << "NetSocket::newStatus -- her's is bigger!!!";
+      //qDebug() << "NetSocket::newStatus -- her's is bigger!!!";
 
       sendStatusMessage(senderAddress, port);
-      qDebug() << "NetSocket::newStatus -- wrote our status!!!";
-      qDebug() << '\n';
+      //qDebug() << "NetSocket::newStatus -- wrote our status!!!";
+      //qDebug() << '\n';
     }  
   
   }
@@ -687,25 +727,25 @@ void NetSocket::newStatus(const QVariantMap& message,
   if (anythingHot){
     
     
-     qDebug() << "NetSocket::newStatus -- tie!!!";
+     //qDebug() << "NetSocket::newStatus -- tie!!!";
     // Flip a coin
     if (qrand() % 2){
       
       
-      qDebug() << "NetSocket::newStatus -- got heads! try to find next neighbor";
+      //qDebug() << "NetSocket::newStatus -- got heads! try to find next neighbor";
       QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
       
-      qDebug() << "NetSocket::newStatus -- send to next neighbor!!!";
+      //qDebug() << "NetSocket::newStatus -- send to next neighbor!!!";
       
-      qDebug() << hotMessage;
+      //qDebug() << hotMessage;
       this->writeDatagram(hotMessage, neighbor.first, neighbor.second);
-      qDebug() << "NetSocket::newStatus -- sent message!!!";
+      //qDebug() << "NetSocket::newStatus -- sent message!!!";
       emit startRumorTimer(2000);
 
     }
     else {
-      qDebug() << "NetSocket::newStatus -- got tails! done!!!";
-      qDebug() << '\n';
+      //qDebug() << "NetSocket::newStatus -- got tails! done!!!";
+      //qDebug() << '\n';
       anythingHot = false; 
     }
   }
@@ -721,8 +761,8 @@ void NetSocket::readData()
   
   const qint64 size = this->pendingDatagramSize();
   if (size == -1){
-    qDebug() << "NetSocket::readData() -- Error signalled for new data, but nothing present";
-    qDebug() << '\n';
+    //qDebug() << "NetSocket::readData() -- Error signalled for new data, but nothing present";
+    //qDebug() << '\n';
     return;
   }
   char data[size];
@@ -731,10 +771,10 @@ void NetSocket::readData()
   quint16 port = 0;
   
   if (size != this->readDatagram(data, size, &senderAddress, &port)){
-    qDebug() << "NetSocket::readData() -- Error reading data from socket. Sizes don't match!!!";
+    //qDebug() << "NetSocket::readData() -- Error reading data from socket. Sizes don't match!!!";
   }
 
-  qDebug() << "NetSocket::readData() -- just received a datagram!!!";
+  //qDebug() << "NetSocket::readData() -- just received a datagram!!!";
 
   neighborList.addNeighbor(senderAddress, port);
 
@@ -744,15 +784,13 @@ void NetSocket::readData()
   QDataStream stream(arr);
   stream >> items;
   
-  qDebug() << "Checking if message is rumor or status..."; //Debug Message to make sure we receive the right stuff!!!
+  //qDebug() << "Checking if message is rumor or status..."; //Debug Message to make sure we receive the right stuff!!!
 
 
   // Rumor message:
-  if (!items.contains("Want")){
+  if (items.contains("Origin") &&
+      items.contains("SeqNo")){
    
-
-    if (items.contains("Origin") && 
-	items.contains("SeqNo")){
 
 
       qDebug() << "Rumor!!!";
@@ -766,32 +804,33 @@ void NetSocket::readData()
 	sendStatusMessage(senderAddress, port);
 	newRumor();
       }
-    }
-    
-    else {
-      
-      qDebug() << "NetSocket::readMessage() -- malformed rumor message";
-    }
   }
+
 
   // Status message:
   else if (items.contains("Want") && !(items.contains("ChatText"))){
 					
 
-    qDebug() << "Status!!!";
+    //qDebug() << "Status!!!";
     newStatus(items, senderAddress, port);
     
   }
 
   
-  else {
+  else if (items.contains("Dest") &&
+	   items.contains("ChatText") &&
+	   items.contains("HopLimit") &&
+	   items.contains("Origin")){
 
+    qDebug() << "private message";
+
+    router->receiveMessage(items);
     
-    qDebug() << "Unexpected Message";
-    qDebug() << items;
+    //qDebug() << "Unexpected Message";
+    //qDebug() << items;
   }
 	   
-  qDebug() << '\n';
+  //qDebug() << '\n';
 }
 
 // END: NetSocket
@@ -802,8 +841,6 @@ int main(int argc, char **argv)
 	QApplication app(argc,argv);
 
 	// Create an initial chat dialog window
-	ChatDialog dialog;
-	dialog.show();
 
 
 	
@@ -814,9 +851,20 @@ int main(int argc, char **argv)
 	if (!sock.bind())
 		exit(1);
 
+	ChatDialog dialog(sock.router);
+	dialog.show();
+
+
+
 	QObject::connect(&dialog, SIGNAL(sendMessage(const QString&)),
 			 &sock, SLOT(gotSendMessage(const QString&)));
+	
+	QObject::connect(sock.router, SIGNAL(privateMessage(const QString&, const QString&)),
+			 &dialog, SLOT(newPrivateMessage(const QString&, const QString&)));
 
+	QObject::connect(&dialog, SIGNAL(sendPrivateMessage(const QString&, const QString&)),
+			 sock.router, SLOT(sendMessage(const QString&, const QString&)));
+	
 
 	QObject::connect(&sock, SIGNAL(receivedMessage(const QString&)),
 			 &dialog, SLOT(gotNewMessage(const QString&)));

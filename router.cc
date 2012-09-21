@@ -20,12 +20,15 @@ Router::processRumor(const QVariantMap& rumor,
 		     const quint16 port)
 {
 
+  //qDebug() << rumor;
   QString origin = rumor["Origin"].toString();
-  bool ret = !routingTable.contains(origin);
+  bool neworg = !routingTable.contains(origin);
     
   routingTable[rumor["Origin"].toString()] = QPair<QHostAddress, quint16>(sender, port);
-  return ret;
   
+  if(neworg){
+    emit newOrigin(origin);  
+  }
 }
 
 
@@ -43,6 +46,8 @@ Router::sendMessage(const QString& message,const QString& destination)
   QByteArray arr = Helper::SerializeMap(messageMap);
   
   QPair<QHostAddress, quint16> dest = routingTable[destination];
+  qDebug() << "Sending: " << message;
+  qDebug() << dest.first << ":" << dest.second;
   sock->writeDatagram(arr, dest.first, dest.second);
 }
 
@@ -51,6 +56,7 @@ Router::sendMessage(const QString& message,const QString& destination)
 void 
 Router::receiveMessage(QVariantMap& msg)
 {
+  qDebug() << "Received: " << msg;
   
   QString destination = msg["Dest"].toString();
   int hopLimit;
