@@ -14,7 +14,7 @@ Router::Router(NetSocket *socket)
 
 
 
-bool
+void
 Router::processRumor(const QVariantMap& rumor, 
 		     const QHostAddress& sender,
 		     const quint16 port)

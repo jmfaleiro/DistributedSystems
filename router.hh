@@ -19,7 +19,7 @@ public:
   Router(NetSocket *ns);
   QString me;
 
-bool
+void 
 processRumor(const QVariantMap& rumor, 
 	       const QHostAddress& sender,
 	       const quint16 port);

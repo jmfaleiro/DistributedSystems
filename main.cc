@@ -186,6 +186,9 @@ void ChatDialog::newPrivateMessage(const QString& message, const QString& from)
     
     privChat = new PrivateChatDialog(from);
     privateChats[from] = privChat;
+    QObject::connect(privChat, SIGNAL(sendMessage(const QString&, const QString&)),
+		     router, SLOT(sendMessage(const QString&, const QString&)));
+
     privChat->show();
   }
   
@@ -193,9 +196,6 @@ void ChatDialog::newPrivateMessage(const QString& message, const QString& from)
     
     privChat = privateChats[from];
   }
-  
-  QObject::connect(privChat, SIGNAL(sendMessage(const QString&, const QString&)),
-		   router, SLOT(sendMessage(const QString&, const QString&)));
 
   privChat->externalMessageReceived(message);  
 }
@@ -327,60 +327,39 @@ bool NetSocket::bind()
   // host on different ports.
   for (quint16 p = qMyPortMin; p <= qMyPortMax; p++) {
 		if (QUdpSocket::bind(p)) {
-			//qDebug() << "bound to UDP port " << p;
 
-			
-			/*
-			QPair<QHostAddress, quint16>* ahead;
-			QPair<QHostAddress, quint16>* behind;
-			
+		  /*			//qDebug() << "bound to UDP port " << p;
 
-			
 			if (p == qMyPortMin){
 			  
-			  ahead = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p + 1);
-			  neighbors.append(*ahead);
+
+			  neighborList.addNeighbor(QHostAddress::LocalHost, p + 1);
 		
 			  
 			}
 
 			else if (p == qMyPortMin + 1){
 
-			  ahead = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p + 1);
-			  behind = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p - 1);
-			  
-			  neighbors.append(*ahead);
-			  neighbors.append(*behind);
 
-
-
+			  neighborList.addNeighbor(QHostAddress::LocalHost, p - 1);
+			  neighborList.addNeighbor(QHostAddress::LocalHost, p + 1);
 
 			}
 
 			else if (p == qMyPortMin + 2){
-
-			  ahead = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p + 1);
-			  behind = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p - 1);
-
-			  neighbors.append(*ahead);
-			  neighbors.append(*behind);
-			   
-
-
+	
+			  neighborList.addNeighbor(QHostAddress::LocalHost, p - 1);
+			  neighborList.addNeighbor(QHostAddress::LocalHost, p + 1);
 
 			}
 
 			else if (p == qMyPortMin + 3){
 
-			  behind = new QPair<QHostAddress, quint16>(QHostAddress::LocalHost, p - 1);
-
-			  neighbors.append(*behind);
-
-
+			  neighborList.addNeighbor(QHostAddress::LocalHost, p - 1);
 			}
-			*/
 			
-
+		  */	
+		  
 			
 			for (quint16 q = qMyPortMin; q <= qMyPortMax; q++) {
 			  
@@ -392,7 +371,7 @@ bool NetSocket::bind()
 			  			  
 			}
 			
-
+		  
 			
 
 			QStringList args = QCoreApplication::arguments();
@@ -467,7 +446,7 @@ void NetSocket::sendStatusMessage(QHostAddress address, quint16 port)
   
   QDataStream s(&arr, QIODevice::Append);
   s << udpBodyAsMap;
-  //qDebug() << "NetSocker::sendStatusMessage " << udpBodyAsMap["Want"];
+  qDebug() << "NetSocker::sendStatusMessage " << udpBodyAsMap["Want"];
   this->writeDatagram(arr, address, port);
   //qDebug() << "NetSocket:sendStatusMessage -- finished sending status to " << address << " " << port;
   
@@ -512,7 +491,7 @@ NetSocket::updateVector(const QVariantMap& rumor, bool isRumorMessage)
     anythingHot = true;
     hotMessage = arr;
       
-    //qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
+    qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
       
 
 
@@ -710,6 +689,7 @@ void NetSocket::newStatus(const QVariantMap& message,
       //qDebug() << "NetSocket::newStatus -- wrote required message!!!";
       //qDebug() << '\n';
       emit startRumorTimer(2000);   
+      return;
     }
 
     // Her's is bigger :(
@@ -720,6 +700,7 @@ void NetSocket::newStatus(const QVariantMap& message,
       sendStatusMessage(senderAddress, port);
       //qDebug() << "NetSocket::newStatus -- wrote our status!!!";
       //qDebug() << '\n';
+      return;
     }  
   
   }
@@ -794,13 +775,13 @@ void NetSocket::readData()
 
 
       qDebug() << "Rumor!!!";
-      
+      qDebug() << items;
       bool isRumorMessage = items.contains("ChatText");
       if (updateVector(items, isRumorMessage)){
 	
-	if(router->processRumor(items, senderAddress, port)){
-	  
-	}
+
+	router->processRumor(items, senderAddress, port);
+
 	sendStatusMessage(senderAddress, port);
 	newRumor();
       }
