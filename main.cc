@@ -795,7 +795,7 @@ void NetSocket::readData()
   if (items.contains("Origin") &&
       items.contains("SeqNo")){
    
-
+    /*
     if (items.contains("LastIP") && items.contains("LastPort")){
       
       qDebug() << items;
@@ -803,14 +803,14 @@ void NetSocket::readData()
       quint16 holePort = items["LastPort"].toInt();
       neighborList.addNeighbor(holeIP, holePort);
     }
-
+    */
     router->processRumor(items, senderAddress, port);    
 
     //qDebug() << "Rumor!!!";
     //qDebug() << items;
     
-    items["LastIP"] = senderAddress.toIPv4Address();
-    items["LastPort"] = port;
+    //items["LastIP"] = senderAddress.toIPv4Address();
+    //items["LastPort"] = port;
 
     bool isRumorMessage = items.contains("ChatText");
     if (updateVector(items, isRumorMessage)){
