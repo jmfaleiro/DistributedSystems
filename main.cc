@@ -15,6 +15,49 @@
 #include "main.hh"
 #include "router.hh"
 
+
+// BEGIN: PrivateChatDialog
+
+PrivateChatDialog::PrivateChatDialog(const QString& destination)
+{
+
+  m_destination = destination;
+  setWindowTitle(destination);
+
+
+  textview = new QTextEdit(this);
+  textview->setReadOnly(true);
+
+  textentry = new QLineEdit(this);
+  textentry->setFocus();
+
+  QVBoxLayout *layout = new QVBoxLayout();
+  layout->addWidget(textview);
+  layout->addWidget(textentry);
+  setLayout(layout);
+}
+
+void
+PrivateChatDialog::internalMessageReceived(const QString& msg)
+{
+  
+  textview->append(textentry->text());
+  emit sendMessage(msg, m_destination);
+  textentry->clear();
+}
+
+
+void
+PrivateChatDialog::externalMessageReceived(const QString& msg)
+{
+  textview->append(msg);
+}
+
+
+
+// END: PrivateChatDialog
+
+
 // BEGIN: TextEntryWidget
 
 TextEntryWidget::TextEntryWidget(QWidget * parent) : QTextEdit(parent)  
@@ -117,6 +160,25 @@ void ChatDialog::gotNewMessage(const QString& s)
   qDebug() << "ChatDialog::gotNewMessage -- ok, at least I get called" << '\n';
   textview->append(s);
 }
+
+void ChatDialog::newPrivateMessage(const QString& message, const QString& from)
+{
+  PrivateChatDialog *privChat;
+  if (!privateChats.contains(from)){
+    
+    privChat = new PrivateChatDialog(from);
+    privateChats[from] = privChat;
+    privChat->show();
+  }
+  
+  else{
+    
+    privChat = privateChats[from];
+  }
+
+  privChat->externalMessageReceived(message);  
+}
+
 
 // End: ChatDialog
 

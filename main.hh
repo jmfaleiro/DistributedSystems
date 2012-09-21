@@ -14,12 +14,43 @@
 #include <QTimer>
 #include <QHostInfo>
 #include <QListWidget>
+#include <QHash>
+
 
 #include <neighbors.hh>
 
 
 class Router;
 
+
+class PrivateChatDialog : public QDialog
+{
+  Q_OBJECT
+  
+  public:
+  PrivateChatDialog(const QString& destination);
+					       
+  public slots:
+  
+  void
+  externalMessageReceived(const QString& msg);
+  
+  void 
+  internalMessageReceived(const QString& msg);
+
+signals:
+ 
+  void
+  sendMessage(const QString& msg, const QString& dest);
+
+private:
+
+  QString m_destination;
+  QLineEdit *textentry;
+  QTextEdit *textview;
+
+
+};
 class TextEntryWidget : public QTextEdit
 {
   Q_OBJECT
@@ -45,9 +76,10 @@ public:
 	ChatDialog();
 
 public slots:
-	void gotReturnPressed();
+  void gotReturnPressed();
   void gotNewMessage(const QString& s);
   void gotAddPeer();
+  void newPrivateMessage(const QString& message, const QString& from);
 
 signals:
   void sendMessage (const QString& s);
@@ -58,6 +90,9 @@ private:
 	TextEntryWidget *textline;
   QLineEdit *peerAdder;
   QListWidget *origins;
+  
+  QHash<QString, PrivateChatDialog*> privateChats;
+
 
 };
 
