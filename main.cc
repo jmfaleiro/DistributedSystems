@@ -795,19 +795,19 @@ void NetSocket::readData()
   if (items.contains("Origin") &&
       items.contains("SeqNo")){
    
-
+    /*
     if (items.contains("LastIP") && items.contains("LastPort")){
       
       neighborList.addNeighbor(senderAddress, port);
     }
-
+    */
     router->processRumor(items, senderAddress, port);    
 
     qDebug() << "Rumor!!!";
     qDebug() << items;
     
-    items["LastIP"] = senderAddress.toIPv4Address();
-    items["LastPort"] = port;
+    //items["LastIP"] = senderAddress.toIPv4Address();
+    //items["LastPort"] = port;
 
     bool isRumorMessage = items.contains("ChatText");
     if (updateVector(items, isRumorMessage)){
