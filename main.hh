@@ -13,9 +13,12 @@
 #include <QList>
 #include <QTimer>
 #include <QHostInfo>
+#include <QListWidget>
 
 #include <neighbors.hh>
-#include <router.hh>
+
+
+class Router;
 
 class TextEntryWidget : public QTextEdit
 {
@@ -54,6 +57,7 @@ private:
 	QTextEdit *textview;
 	TextEntryWidget *textline;
   QLineEdit *peerAdder;
+  QListWidget *origins;
 
 };
 
@@ -174,7 +178,7 @@ private:
   QVariantMap vectorClock;
   quint32 messageIdCounter;
   
-  Router router;
+  Router *router;
   
 };
 

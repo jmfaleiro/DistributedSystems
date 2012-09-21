@@ -9,5 +9,5 @@ INCLUDEPATH += .
 QT += network
 
 # Input
-HEADERS += main.hh neighbors.hh router.hh
-SOURCES += main.cc neighbors.cc router.cc
+HEADERS += main.hh neighbors.hh router.hh helper.hh
+SOURCES += main.cc neighbors.cc router.cc helper.cc

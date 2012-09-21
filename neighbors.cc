@@ -1,4 +1,4 @@
-#include <neighbors.hh>
+#include "neighbors.hh"
 
 NeighborList::NeighborList()
 {
@@ -51,7 +51,7 @@ void NeighborList::addHost(const QString& s)
   
   QStringList parts = s.split(":");
   if (parts.count() != 2){
-    qDebug() << "NetSocket::AddHost didn't receive the right format, expected \"(ipaddr|hostname):port\"";
+    qDebug() << "NetSocket::AddHost didn't receive the right format, expected \"(ipaddr|hostname):port\"" << s;
     return;
   }
 

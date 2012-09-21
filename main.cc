@@ -10,8 +10,10 @@
 #include <QTime>
 #include <QDateTime>
 #include <QUuid>
-#include "main.hh"
+#include <QListWidget>
 
+#include "main.hh"
+#include "router.hh"
 
 // BEGIN: TextEntryWidget
 
@@ -60,10 +62,18 @@ ChatDialog::ChatDialog()
 	// Lay out the widgets to appear in the main window.
 	// For Qt widget and layout concepts see:
 	// http://doc.qt.nokia.com/4.7-snapshot/widgets-and-layouts.html
-	QVBoxLayout *layout = new QVBoxLayout();
-	layout->addWidget(peerAdder);
-	layout->addWidget(textview);
-	layout->addWidget(textline);
+	QHBoxLayout *layout = new QHBoxLayout();
+	
+	QVBoxLayout *innerLayout = new QVBoxLayout();
+	innerLayout->addWidget(peerAdder);
+	innerLayout->addWidget(textview);
+	innerLayout->addWidget(textline);
+
+	origins = new QListWidget();
+
+	layout->addLayout(innerLayout);
+	layout->addWidget(origins);
+	
 	setLayout(layout);
 	
 
@@ -133,7 +143,7 @@ NetSocket::NetSocket()
 
 
 
-
+	router = new Router(this);
 
 	anythingHot = false;
 
@@ -678,16 +688,19 @@ void NetSocket::readData()
   // Rumor message:
   if (!items.contains("Want")){
    
-    router.processRumor(items, vectorClock, senderAddress, port);
+
     if (items.contains("Origin") && 
 	items.contains("SeqNo")){
 
-      
+
       qDebug() << "Rumor!!!";
       
       bool isRumorMessage = items.contains("ChatText");
       if (updateVector(items, isRumorMessage)){
 	
+	if(router->processRumor(items, senderAddress, port)){
+	  
+	}
 	sendStatusMessage(senderAddress, port);
 	newRumor();
       }
