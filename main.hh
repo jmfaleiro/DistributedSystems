@@ -192,7 +192,7 @@ private:
 
     
 
-  QByteArray EMPTY_BYTE_ARRAY;
+  QVariantMap EMPTY_VARIANT_MAP;
   
   int myPortMin, myPortMax;
   //  QHostAddress localhost(QHostAddress::LocalHost);
@@ -206,9 +206,9 @@ private:
   QTimer rumorTimer;
   QTimer antiEntropyTimer;
   QTimer routeRumorTimer;
-  QMap<QString, QList<QByteArray> > messages;
+  QMap<QString, QList<QVariantMap> > messages;
   
-  QByteArray hotMessage;
+  QVariantMap hotMessage;
 
   bool anythingHot;
   
@@ -217,7 +217,7 @@ private:
   QVariantMap vectorClock;
   quint32 messageIdCounter;
   
-
+  bool noForward;
   
 };
 

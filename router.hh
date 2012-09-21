@@ -16,7 +16,7 @@ class Router : public QObject
   Q_OBJECT
 
 public:
-  Router(NetSocket *ns);
+  Router(NetSocket *ns, bool nf);
   QString me;
 
 void 
@@ -44,6 +44,7 @@ private:
   QHash<QString, QPair<QHostAddress, quint16> > routingTable;
   NetSocket *sock;
   QTimer timer;
+  bool noForward;
 
 };
 

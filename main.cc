@@ -14,6 +14,7 @@
 
 #include "main.hh"
 #include "router.hh"
+#include "helper.hh"
 
 
 // BEGIN: PrivateChatDialog
@@ -243,7 +244,7 @@ NetSocket::NetSocket()
 
 
 
-	router = new Router(this);
+
 
 	anythingHot = false;
 
@@ -381,7 +382,16 @@ bool NetSocket::bind()
 			  
 			  //qDebug() << args[i];			  
 			  addHost(args[i]);
+			  
+			  if (args[i] == "-noforward"){
+			    
+			    noForward = true;
+			  }
 			}
+			
+			noForward = false;
+			
+			router = new Router(this, noForward);
 			
 			QTextStream stream(&myNameString);
 			
@@ -489,7 +499,7 @@ NetSocket::updateVector(const QVariantMap& rumor, bool isRumorMessage)
     stream << rumor;
 
     anythingHot = true;
-    hotMessage = arr;
+    hotMessage = rumor;
       
     qDebug() << "NetSocket::newRumor -- yay, in-order message!!!";
       
@@ -498,11 +508,11 @@ NetSocket::updateVector(const QVariantMap& rumor, bool isRumorMessage)
     vectorClock[origin] = expected + 1;
 	
     if (expected == 1){
-      QList<QByteArray> temp;
+      QList<QVariantMap> temp;
       messages[origin] = temp;
-      messages[origin].append(EMPTY_BYTE_ARRAY);
+      messages[origin].append(EMPTY_VARIANT_MAP);
     }
-    messages[origin].append(arr);
+    messages[origin].append(rumor);
 
     if (isRumorMessage){
       emit receivedMessage ((rumor["ChatText"]).toString());    	
@@ -533,12 +543,17 @@ void NetSocket::newRumor()
 
   rumorTimer.stop();  
   
-  if (anythingHot){
+  if(anythingHot){
+    if (!noForward || !hotMessage.contains("ChatText")){
 
-    QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
+      QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
+
+      this->writeDatagram(Helper::SerializeMap(hotMessage), 
+			  neighbor.first, 
+			  neighbor.second);   
     
-    this->writeDatagram(hotMessage, neighbor.first, neighbor.second);   
-    emit startRumorTimer(2000);
+      emit startRumorTimer(2000);
+    }
   }
 }
 
@@ -681,13 +696,14 @@ void NetSocket::newStatus(const QVariantMap& message,
 
     // Our vector is bigger!!!
     if ((ans = tryFindFirstBigger(vectorClock, message["Want"].toMap(), &required)) != ""){
-    
-      //qDebug() << "NetSocket::newStatus -- our vector is bigger!!!";
-      //qDebug() << "NetSocket:: newStatus -- neighbor wants " << ans << ":" << required;
-    
-      this->writeDatagram(messages[ans][required], senderAddress, port);
-      //qDebug() << "NetSocket::newStatus -- wrote required message!!!";
-      //qDebug() << '\n';
+
+      if (!noForward || !messages[ans][required].contains("ChatText")){
+
+	this->writeDatagram(Helper::SerializeMap(messages[ans][required]), 
+			    senderAddress, 
+			    port);
+      }
+
       emit startRumorTimer(2000);   
       return;
     }
@@ -705,29 +721,35 @@ void NetSocket::newStatus(const QVariantMap& message,
   
   }
   // Tie: propagate hot message
-  if (anythingHot){
-    
-    
-     //qDebug() << "NetSocket::newStatus -- tie!!!";
-    // Flip a coin
-    if (qrand() % 2){
-      
-      
-      //qDebug() << "NetSocket::newStatus -- got heads! try to find next neighbor";
-      QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
-      
-      //qDebug() << "NetSocket::newStatus -- send to next neighbor!!!";
-      
-      //qDebug() << hotMessage;
-      this->writeDatagram(hotMessage, neighbor.first, neighbor.second);
-      //qDebug() << "NetSocket::newStatus -- sent message!!!";
-      emit startRumorTimer(2000);
 
-    }
-    else {
-      //qDebug() << "NetSocket::newStatus -- got tails! done!!!";
-      //qDebug() << '\n';
-      anythingHot = false; 
+  if (anythingHot){
+    if (!noForward || !hotMessage.contains("ChatText")){
+    
+    
+      //qDebug() << "NetSocket::newStatus -- tie!!!";
+      // Flip a coin
+      if (qrand() % 2){
+      
+      
+	//qDebug() << "NetSocket::newStatus -- got heads! try to find next neighbor";
+	QPair<QHostAddress, quint16> neighbor = neighborList.randomNeighbor();
+      
+	//qDebug() << "NetSocket::newStatus -- send to next neighbor!!!";
+      
+	//qDebug() << hotMessage;
+      
+	this->writeDatagram(Helper::SerializeMap(hotMessage),
+			    neighbor.first, 
+			    neighbor.second);
+	//qDebug() << "NetSocket::newStatus -- sent message!!!";
+	emit startRumorTimer(2000);
+
+      }
+      else {
+	//qDebug() << "NetSocket::newStatus -- got tails! done!!!";
+	//qDebug() << '\n';
+	anythingHot = false; 
+      }
     }
   }
 }
@@ -818,6 +840,11 @@ void NetSocket::readData()
 
 int main(int argc, char **argv)
 {
+  for(int i = 0; i < argc; ++i){
+    
+    
+  }
+  
 	// Initialize Qt toolkit
 	QApplication app(argc,argv);
 

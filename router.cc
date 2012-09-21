@@ -7,9 +7,10 @@
 
 #define HOP_LIMIT 10
 
-Router::Router(NetSocket *socket)
+Router::Router(NetSocket *socket, bool nf)
 {
   sock = socket;
+  noForward = nf;
 }
 
 
@@ -66,7 +67,7 @@ Router::receiveMessage(QVariantMap& msg)
     emit privateMessage(msg["ChatText"].toString(), msg["Origin"].toString());
   }
   
-  else if (hopLimit > 0){
+  else if (!noForward && hopLimit > 0){
     
     if (--hopLimit != 0){
       
