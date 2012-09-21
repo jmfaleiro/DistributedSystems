@@ -373,7 +373,7 @@ bool NetSocket::bind()
 			}
 			
 		  
-			
+			noForward = false;	
 
 			QStringList args = QCoreApplication::arguments();
 			
@@ -385,11 +385,12 @@ bool NetSocket::bind()
 			  
 			  if (args[i] == "-noforward"){
 			    
+			    qDebug() << "No Forwarding!!!";
 			    noForward = true;
 			  }
 			}
 			
-			noForward = false;
+		
 			
 			router = new Router(this, noForward);
 			
