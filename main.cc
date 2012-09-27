@@ -841,9 +841,11 @@ void NetSocket::readData()
     ////qDebug() << "Rumor!!!";
     ////qDebug() << items;
     
+
+    
     items["LastIP"] = senderAddress.toIPv4Address();
     items["LastPort"] = port;
-
+    
     bool isRumorMessage = items.contains("ChatText");
     if (updateVector(items, isRumorMessage)){
 
