@@ -42,8 +42,8 @@ class PrivateChatDialog : public QDialog
   void 
   internalMessageReceived();
   
-protected:
-  virtual void
+
+  void
   closeEvent(QCloseEvent *e);
   
 

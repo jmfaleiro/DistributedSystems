@@ -201,6 +201,7 @@ void ChatDialog::destroyPrivateWindow(const QString & from)
     privateChats.remove(from);
     
     delete(privChat);
+    //qDebug() << "Removed host from hash table!";
   }
 }
 void ChatDialog::newPrivateMessage(const QString& message, const QString& from)
@@ -238,6 +239,12 @@ ChatDialog::openEmptyPrivateChat(QListWidgetItem* item)
     privateChats[destination] = privChat;
     connect(privChat, SIGNAL(sendMessage(const QString&, const QString&)),
 	    router, SLOT(sendMessage(const QString&, const QString&)));
+    
+    connect(privChat, SIGNAL(closed(const QString&)),
+	    this, SLOT(destroyPrivateWindow(const QString&)));
+
+    
+    //qDebug() << "Opened empty private chat!";
     privChat->show();
   }
   
