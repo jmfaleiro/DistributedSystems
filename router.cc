@@ -68,8 +68,8 @@ Router::sendMessage(const QString& message,const QString& destination)
   QByteArray arr = Helper::SerializeMap(messageMap);
   
   QPair<QHostAddress, quint16> dest = routingTable[destination];
-  qDebug() << "Sending: " << message;
-  qDebug() << dest.first << ":" << dest.second;
+  //  qDebug() << "Sending: " << message;
+  //qDebug() << dest.first << ":" << dest.second;
   sock->writeDatagram(arr, dest.first, dest.second);
 }
 
@@ -78,7 +78,7 @@ Router::sendMessage(const QString& message,const QString& destination)
 void 
 Router::receiveMessage(QVariantMap& msg)
 {
-  qDebug() << "Received: " << msg;
+  //qDebug() << "Received: " << msg;
   
   QString destination = msg["Dest"].toString();
   int hopLimit = msg["HopLimit"].toInt();

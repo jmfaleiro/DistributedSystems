@@ -15,6 +15,8 @@
 #include <QHostInfo>
 #include <QListWidget>
 #include <QHash>
+#include <QCloseEvent>
+#include <QVBoxLayout>
 
 
 #include <neighbors.hh>
@@ -29,7 +31,9 @@ class PrivateChatDialog : public QDialog
   
   public:
   PrivateChatDialog(const QString& destination);
-					       
+  ~PrivateChatDialog();
+				
+					      
   public slots:
   
   void
@@ -37,20 +41,30 @@ class PrivateChatDialog : public QDialog
   
   void 
   internalMessageReceived();
+  
+protected:
+  virtual void
+  closeEvent(QCloseEvent *e);
+  
 
 signals:
  
   void
   sendMessage(const QString& msg, const QString& dest);
+  
+  void 
+  closed(const QString & destination);
 
 private:
 
   QString m_destination;
   QLineEdit *textentry;
   QTextEdit *textview;
-
+  QVBoxLayout *layout;
 
 };
+
+
 class TextEntryWidget : public QTextEdit
 {
   Q_OBJECT
@@ -82,6 +96,7 @@ public slots:
   void addOrigin(const QString& org);
   void newPrivateMessage(const QString& message, const QString& from);
   void openEmptyPrivateChat(QListWidgetItem* item);
+  void destroyPrivateWindow(const QString & from);
 
 signals:
   void sendMessage (const QString& s);
