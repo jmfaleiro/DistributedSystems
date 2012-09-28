@@ -613,7 +613,7 @@ void NetSocket::excludeNeighbor(quint32 port)
 
 
 // If none of the elements are bigger, the string is empty.
-QString NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap& map2, int *wanted)
+int NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap& map2, QString* key)
 {
   QList<QString> keys = map1.keys();
   for(int i = 0; i < keys.count(); ++i){
@@ -622,14 +622,12 @@ QString NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap
       
       //////qDebug() << "NetSocket::tryFindFirstBigger -- first if ok";
       // both have the key, but map1's is higher: Success!!!
-      if (map1[keys[i]].toUInt() > map2[keys[i]].toUInt()){
-	
-
-	*wanted = map2[keys[i]].toUInt();
+      if ((map1[keys[i]].toUInt() > map2[keys[i]].toUInt()) && 
+	  (map1[keys[i]].toUInt() > 1)){
 
 	//////qDebug() << "NetSocket::tryFindFirstBigger -- inner if ok";
-	return keys[i];
-
+	*key = keys[i];
+	return map2[keys[i]].toUInt();
       }
       
       else
@@ -638,16 +636,20 @@ QString NetSocket::tryFindFirstBigger(const QVariantMap& map1, const QVariantMap
 
 
     // map2 does not have the key: Success!!!
-    else{
+    else if (map1[keys[i]].toUInt() == 1){
      
-      *wanted = 1;
-      return keys[i];
-
+      continue;
+    }
+    
+    else {
+      
+      *key = keys[i];
+      return 1;
     }
 
   }
-    
-  return "";
+  
+  return -1;
 }
 
 
@@ -728,7 +730,7 @@ void NetSocket::newStatus(const QVariantMap& message,
     ////qDebug() << "NetSocket::newStatus " << message["Want"];
 
     // Our vector is bigger!!!
-    if ((ans = tryFindFirstBigger(vectorClock, message["Want"].toMap(), &required)) != ""){
+    if ((required = tryFindFirstBigger(vectorClock, message["Want"].toMap(), &ans)) != -1){
 
       if (!noForward || !messages[ans][required].contains("ChatText")){
 
@@ -742,7 +744,7 @@ void NetSocket::newStatus(const QVariantMap& message,
     }
 
     // Her's is bigger :(
-    else if ((ans = tryFindFirstBigger(message["Want"].toMap(), vectorClock, &required)) != ""){
+    else if ((required = tryFindFirstBigger(message["Want"].toMap(), vectorClock, &ans)) != -1){
     
       ////qDebug() << "NetSocket::newStatus -- her's is bigger!!!";
 

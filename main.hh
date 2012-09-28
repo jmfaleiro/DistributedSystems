@@ -183,7 +183,7 @@ private:
   // is greater than map2's corresponding index.
   //
   // If we find an index, required is set to its value.
-  QString tryFindFirstBigger(const QVariantMap& map1,const QVariantMap& map2, int *required);
+  int tryFindFirstBigger(const QVariantMap& map1,const QVariantMap& map2, QString *required);
   
 
   // randomNeighbor: Finds a random neighbor "statefully".
