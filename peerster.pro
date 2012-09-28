@@ -7,6 +7,7 @@ TARGET =
 DEPENDPATH += .
 INCLUDEPATH += .
 QT += network
+CONFIG += debug
 
 # Input
 HEADERS += main.hh neighbors.hh router.hh helper.hh
