@@ -18,7 +18,8 @@ public:
   NeighborList();
   QPair<QHostAddress, quint16> randomNeighbor();
   void addNeighbor(const QHostAddress& addr, quint16 port);
-
+  QList<QPair<QHostAddress, quint16> > getAllNeighbors();
+							  
 
 public slots:
   void addHost(const QString& s);

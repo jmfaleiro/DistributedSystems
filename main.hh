@@ -205,7 +205,7 @@ private:
   bool expectedRumor(const QVariantMap& rumor, QString* origin, quint32* expected);
   bool updateVector(const QVariantMap& rumor, bool routeMessage);
 
-    
+  void broadcastMessage(const QVariantMap& msg);
 
   QVariantMap EMPTY_VARIANT_MAP;
   

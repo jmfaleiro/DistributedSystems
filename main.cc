@@ -322,12 +322,12 @@ void NetSocket::routeRumorTimeout()
     
   if (updateVector(udpBodyAsMap, false)){
     
-    newRumor();
+    broadcastMessage(udpBodyAsMap);
     emit startRouteRumorTimer(60000); 
   }
   
   else {
-    ////qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
+    qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
     *((int *)NULL) = 1;
   }  
 }
@@ -788,6 +788,19 @@ void NetSocket::newStatus(const QVariantMap& message,
 }
   
 
+void NetSocket::broadcastMessage(const QVariantMap & msg)
+{
+  QList<QPair<QHostAddress, quint16> > neighbors = neighborList.getAllNeighbors();
+  
+  int len = neighbors.count();
+  for(int i = 0; i < len; ++i){
+    
+    this->writeDatagram(Helper::SerializeMap(msg), 
+			neighbors[i].first, 
+			neighbors[i].second);
+  }
+}
+
 // Read data from the network and redirect the message for analysis to 
 // either newRumor or newStatus.
 
@@ -850,7 +863,11 @@ void NetSocket::readData()
     if (updateVector(items, isRumorMessage)){
 
       sendStatusMessage(senderAddress, port);
-      newRumor();
+      
+      if (isRumorMessage)
+	newRumor();
+      else
+	broadcastMessage(items);      
     }
   }
 

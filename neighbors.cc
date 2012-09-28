@@ -44,6 +44,12 @@ void NeighborList::addNeighbor(const QHostAddress& addr, quint16 port)
   }
 }
 
+QList<QPair<QHostAddress, quint16> > 
+NeighborList::getAllNeighbors()
+{
+  return neighbors;
+}
+
 void NeighborList::addHost(const QString& s)
 {
     qDebug() << "NetSocket::addHost -- at least I got called";
