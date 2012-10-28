@@ -11,6 +11,7 @@
 #include <QDateTime>
 #include <QUuid>
 #include <QListWidget>
+#include <QtCrypto>
 
 #include "main.hh"
 #include "router.hh"
@@ -964,7 +965,7 @@ int main(int argc, char **argv)
 	// Create an initial chat dialog window
 
 
-	
+	QCA::Initializer qcainit;
 
 	
 	// Create a UDP network socket
@@ -974,7 +975,8 @@ int main(int argc, char **argv)
 
 	ChatDialog dialog(sock.router);
 	dialog.show();
-
+	
+	
 
 	QObject::connect(&dialog, SIGNAL(indexFiles(const QStringList&)),
 			 &sock, SLOT(processFiles(const QStringList&)));

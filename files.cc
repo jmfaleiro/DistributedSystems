@@ -10,6 +10,17 @@
 
 #include <files.hh>
 
+/*
+ * We have to take a lot of care while hashing because 
+ * the data() member of the ByteArray returns a \0 terminated
+ * string. The padding should *not* affect the result of 
+ * the way we do hashing. 
+ * 
+ * We have to always specify the number of bytes we want to hash
+ * and the number of bytes we read from the data buffer into
+ * the stream.
+ */
+
 FileStore::FileStore()
 {
 
@@ -42,7 +53,10 @@ FileStore::IndexSingleFile(const QString& inputFile)
   
   qint64 size = file.size();
   QDataStream fileStream(&file);
-  QList<QVariant> fileHash = ConvertBytes(HashBlocks(fileStream));
+  HashBlocks(fileStream, inputFile);
+
+  /*
+  QList<QVariant> fileHash = ConvertBytes(HashFinalBlock(HashBlocks(fileStream)));
   
   qDebug() << "Hashed " << inputFile << ". Num levels = " << fileHash.count();
 
@@ -56,6 +70,7 @@ FileStore::IndexSingleFile(const QString& inputFile)
   }
   
   files[inputFile] = fileDetails;
+  */
 }
 
 QList<QVariant>
@@ -71,26 +86,16 @@ FileStore::ConvertBytes(const QList<QByteArray>&bytes)
   return ret;
 }
 
+
 /*
  * Recursively hash the blocks of a file along
  *  with the meta list.
  */
-QList<QByteArray>
-FileStore::HashBlocks(QDataStream& s)
-{
-  char data[2] = {'a', 'b'};
+void
+FileStore::HashBlocks(QDataStream& s, const QString& fileName)
+{  
+  char data[BLOCK_SIZE];
   int numRead;
-  
-  QList<QByteArray> ret;
-  
-  QStringList supportedHashes = QCA::Hash::supportedTypes();
-  for(int i = 0; i < supportedHashes.count(); ++i)
-    qDebug() << supportedHashes[i];
-  
-  if (!QCA::isSupported("sha256"))
-    qDebug() << "sha256 not supported";
-  
-  QCA::Hash shaHash("sha-256");
   
   QByteArray result;
   QDataStream resultStream(&result, QIODevice::Append);
@@ -98,21 +103,95 @@ FileStore::HashBlocks(QDataStream& s)
 
   while((numRead = s.readRawData(data, BLOCK_SIZE)) != -1){
     
-    shaHash.update(data, 2);
+    QByteArray hashArray = Hash(data, numRead);
+    quint32 hash = ConvertHash(hashArray);
+    MapBlock(hash, data, numRead, fileName);
     
-    char* temp = shaHash.final().toByteArray().data();
-    resultStream.writeRawData(temp, numRead);
+    resultStream.writeRawData(hashArray.data(), BLOCK_SIZE);
+    resultSize += HASH_SIZE;
     
-    shaHash.clear();
-    resultSize += 32;
+    if (numRead < BLOCK_SIZE)
+      break;
   }
   
-  if (resultSize > 32){
+  if (resultSize > BLOCK_SIZE){
     
-    ret << HashBlocks(resultStream);
+    QDataStream resultROStream(&result, QIODevice::ReadOnly);
+    HashBlocks(resultROStream, fileName);
+  }  
+  
+  // We need to add one more master block.
+  else {
+    
+    QByteArray hashArray = Hash(result.data(), resultSize);
+    quint32 hash = ConvertHash(hashArray);
+    MapBlock(hash, result.data(), resultSize, fileName);    
   }
-
-  ret << result;
-
-  return ret;
 }
+
+QByteArray
+FileStore::Hash(const char *data, int size)
+{
+  QCA::Hash shaHash("sha256");
+  
+  shaHash.update(data, size);
+  return shaHash.final().toByteArray();
+}
+
+quint32
+FileStore::ConvertHash(const QByteArray& arr)
+{
+  bool ok;
+  QString hashAsString = QCA::arrayToHex(arr);
+  quint32 hash = hashAsString.toUInt(&ok, 16);
+  
+  if (!ok){
+    qDebug() << "Couldn't convert hash to uint";
+    *((int *)NULL) = 1;      
+  }
+  
+  return hash;
+}
+
+void
+FileStore::MapBlock(quint32 hash,
+		    const char *data,
+		    int size,
+		    const QString& fileName)
+{
+  QByteArray block(data, size);
+  
+  QMap<QString, QVariant> val;  
+  
+  val["name"] = fileName;
+  val["block"] = block;
+  
+  files[hash] = val;
+}
+
+/*
+QByteArray
+FileStore::ReturnBlock(quint32 index)
+{
+  QList<QMap<QString, QVariant> > values = files.values();
+  
+  for(int i = 0; i < values.count(); ++i){
+    
+    QList<QVariant> fileHash = values[i]["hash"].toList();
+    
+    for(int j = 0; j < fileHash.count(); ++j){
+      
+      
+    }
+    
+  }
+}
+
+// If this function is called, then its'
+// safe read 4 bytes.
+quint32
+FileStore::ParseInt(char *data)
+{
+  
+}
+*/

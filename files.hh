@@ -2,6 +2,7 @@
 #define FILES_HH
 
 #define BLOCK_SIZE 8192 
+#define HASH_SIZE 32
 
 #include <QObject>
 #include <QString>
@@ -35,10 +36,28 @@ private:
   void
   IndexSingleFile(const QString& file);
   
-  QList<QByteArray>
-  HashBlocks(QDataStream& s);
   
-  QHash<QString, QMap<QString, QVariant> > files;
+  void
+  HashBlocks(QDataStream& s, const QString& fileName);
+
+  
+  QByteArray
+  Hash(const char *data, int size);
+
+  quint32
+  ConvertHash(const QByteArray& arr);
+
+  void
+  MapBlock(quint32 hash,
+	   const char *data,
+	   int size,
+	   const QString& fileName);
+
+
+    
+  
+  QHash<quint32, QMap<QString, QVariant> > files;
+
 };
 
 #endif // FILES_HH
