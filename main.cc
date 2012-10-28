@@ -119,7 +119,10 @@ ChatDialog::ChatDialog(Router *r)
 
 	
 	peerAdder = new QLineEdit(this);
-	
+	fileButton = new QPushButton("Share File ...", this);
+	fileButton->setDown(false);
+	fileButton->setChecked(false);
+
 
 	// Lay out the widgets to appear in the main window.
 	// For Qt widget and layout concepts see:
@@ -130,9 +133,12 @@ ChatDialog::ChatDialog(Router *r)
 	innerLayout->addWidget(peerAdder);
 	innerLayout->addWidget(textview);
 	innerLayout->addWidget(textline);
+	innerLayout->addWidget(fileButton);
 
 	origins = new QListWidget();
-
+	
+	
+	
 	layout->addLayout(innerLayout);
 	layout->addWidget(origins);
 	
@@ -154,9 +160,46 @@ ChatDialog::ChatDialog(Router *r)
 	
 	connect(origins, SIGNAL(itemDoubleClicked(QListWidgetItem*)),
 		this, SLOT(openEmptyPrivateChat(QListWidgetItem*)));
+
+	connect(fileButton, SIGNAL(pressed()),
+		this, SLOT(fileButtonClicked()));
+			 
 	
 }
 
+void
+ChatDialog::fileButtonClicked()
+{
+  //qDebug() << "file button clicked\n";
+  
+  // First disable the button from being
+  // clicked until we're done selecting files.
+  fileButton->setDown(true);
+  
+  // Setup a new file menu.
+  fileMenu = new QFileDialog(this);
+  fileMenu->setFileMode(QFileDialog::ExistingFiles);
+  
+  // Connect the signal for file selection to 
+  // the corresponding slot.
+  connect(fileMenu, SIGNAL(filesSelected(const QStringList &)),
+	  this, SLOT(filesSelected(const QStringList &)));
+  
+  fileMenu->show();  
+}
+
+void
+ChatDialog::filesSelected(const QStringList & files)
+{   
+  
+  int len = files.count();
+  for(int i = 0; i < len; ++i)
+    qDebug() << files[i] << '\n';
+
+  //delete(fileMenu);
+  fileButton->setDown(false);  
+  emit indexFiles(files);
+}
 
 void 
 ChatDialog::addOrigin(const QString& origin)
@@ -309,6 +352,12 @@ NetSocket::NetSocket()
 			 this, SLOT(processAntiEntropyTimeout()));
 			 
 	
+}
+
+void 
+NetSocket::processFiles(const QStringList &files)
+{
+  fs.IndexFiles(files);
 }
 
 void NetSocket::routeRumorTimeout()
@@ -927,7 +976,8 @@ int main(int argc, char **argv)
 	dialog.show();
 
 
-
+	QObject::connect(&dialog, SIGNAL(indexFiles(const QStringList&)),
+			 &sock, SLOT(processFiles(const QStringList&)));
 	QObject::connect(&dialog, SIGNAL(sendMessage(const QString&)),
 			 &sock, SLOT(gotSendMessage(const QString&)));
 	

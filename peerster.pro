@@ -5,10 +5,11 @@
 TEMPLATE = app
 TARGET = 
 DEPENDPATH += .
-INCLUDEPATH += .
+INCLUDEPATH += . 
 QT += network
-CONFIG += debug
+CONFIG += crypto
+
 
 # Input
-HEADERS += main.hh neighbors.hh router.hh helper.hh
-SOURCES += main.cc neighbors.cc router.cc helper.cc
+HEADERS += main.hh neighbors.hh router.hh helper.hh files.hh
+SOURCES += main.cc neighbors.cc router.cc helper.cc files.cc
