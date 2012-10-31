@@ -67,7 +67,9 @@ signals:
 
 
     void
-    destroyRequest(const QString &query);										       
+    destroyRequest(const QString &query);
+					
+  					
   
 public slots:
   
@@ -79,6 +81,8 @@ public slots:
   
   void
   closeEvent(QCloseEvent *e);
+  
+  
   
 private:
   
@@ -108,9 +112,21 @@ public slots:
 
   void
   newSearchResult(const QString &query, const QMap<QString, QVariant> &response);
+  
+  void
+  fileButtonClicked();
+  
+  void
+  filesSelected(const QStringList & files);
+
 
 
 signals:
+  
+  void
+  indexFiles(const QStringList& ans);					
+
+
   
   void
   destroyRequest(const QString &queryString);
@@ -120,8 +136,11 @@ signals:
 
 private:
   
+  
+  QFileDialog *fileMenu;
+  QPushButton *fileButton;
   FileRequests *m_fr;
-  TextEntryWidget *text;
+  QLineEdit *text;
   QHash<QString, DownloadBox *> activeRequests;
 };
 
@@ -186,12 +205,7 @@ public slots:
   void openEmptyPrivateChat(QListWidgetItem* item);
   void destroyPrivateWindow(const QString & from);
 
-  void
-  fileButtonClicked();
-  
-  void
-  filesSelected(const QStringList & files);
-
+ 
 
 
 signals:
@@ -208,8 +222,7 @@ private:
   
   Router *router;
   QHash<QString, PrivateChatDialog*> privateChats;
-  QPushButton *fileButton;
-  QFileDialog *fileMenu;
+ 
 
 };
 

@@ -48,7 +48,7 @@ Dispatcher::processRequest(const QMap<QString, QVariant> &request)
 	emit reply(ret, request["Origin"].toString());
       }      
       
-      //distributeBudget(budget, request);
+      distributeBudget(budget-1, request);
     }     
   }
 }

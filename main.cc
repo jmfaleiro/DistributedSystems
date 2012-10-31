@@ -12,6 +12,7 @@
 #include <QUuid>
 #include <QListWidget>
 #include <QtCrypto>
+#include <QLabel>
 
 #include "main.hh"
 #include "router.hh"
@@ -20,8 +21,24 @@
 
 FileDialog::FileDialog(FileRequests *fr)
 {
-  text = new TextEntryWidget(this);
   m_fr = fr;
+  
+  QLabel *entryLabel = new QLabel("Search here:");
+  
+  QVBoxLayout *layout = new QVBoxLayout();
+  QHBoxLayout *innerLayout = new QHBoxLayout();
+
+  text = new QLineEdit(this);
+  innerLayout->addWidget(entryLabel);
+  innerLayout->addWidget(text);
+  
+  fileButton = new QPushButton("Share File ...", this);
+  fileButton->setDown(false);
+  fileButton->setChecked(false);
+  
+  layout->addLayout(innerLayout);
+  layout->addWidget(fileButton);
+  setLayout(layout);
   
   connect(text, SIGNAL(returnPressed()),
 	  this, SLOT(newSearch()));
@@ -34,13 +51,53 @@ FileDialog::FileDialog(FileRequests *fr)
   
   connect(this, SIGNAL(destroyRequest(const QString &)),
 	  fr, SLOT(destroyRequest(const QString &)));
+
+  connect(fileButton, SIGNAL(pressed()),
+	  this, SLOT(fileButtonClicked()));
+
 		       
 }
+
+
+void
+FileDialog::fileButtonClicked()
+{
+  //qDebug() << "file button clicked\n";
+  
+  // First disable the button from being
+  // clicked until we're done selecting files.
+  fileButton->setDown(true);
+  
+  // Setup a new file menu.
+  fileMenu = new QFileDialog(this);
+  fileMenu->setFileMode(QFileDialog::ExistingFiles);
+  
+  // Connect the signal for file selection to 
+  // the corresponding slot.
+  connect(fileMenu, SIGNAL(filesSelected(const QStringList &)),
+	  this, SLOT(filesSelected(const QStringList &)));
+  
+  fileMenu->show();  
+}
+
+void
+FileDialog::filesSelected(const QStringList & files)
+{   
+  
+  int len = files.count();
+  for(int i = 0; i < len; ++i)
+    qDebug() << files[i] << '\n';
+
+  //delete(fileMenu);
+  fileButton->setDown(false);  
+  emit indexFiles(files);
+}
+
 
 void
 FileDialog::newSearch()
 {
-  QString query = text->toPlainText();
+  QString query = text->text();
   text->clear();
   qDebug() << "New request!";
   if (!activeRequests.contains(query)){
@@ -233,13 +290,10 @@ ChatDialog::ChatDialog(Router *r)
 	// You might change this into a read/write QTextEdit,
 	// so that the user can easily enter multi-line messages.
 	textline = new TextEntryWidget(this);
-	textline->setFocus();
+
 
 	
 	peerAdder = new QLineEdit(this);
-	fileButton = new QPushButton("Share File ...", this);
-	fileButton->setDown(false);
-	fileButton->setChecked(false);
 
 
 	// Lay out the widgets to appear in the main window.
@@ -248,22 +302,30 @@ ChatDialog::ChatDialog(Router *r)
 	QHBoxLayout *layout = new QHBoxLayout();
 	
 	QVBoxLayout *innerLayout = new QVBoxLayout();
+	QVBoxLayout *innerLayout2 = new QVBoxLayout();
+	
+	QLabel *addPeer = new QLabel("Add a neighbor:");
+	QLabel *typeHere = new QLabel("Type here for public chat:");
+	innerLayout->addWidget(addPeer);
 	innerLayout->addWidget(peerAdder);
 	innerLayout->addWidget(textview);
+	innerLayout->addWidget(typeHere);
 	innerLayout->addWidget(textline);
-	innerLayout->addWidget(fileButton);
 
-	origins = new QListWidget();
 	
+	QLabel *originLabel = new QLabel("Double-click someone to private chat:");
+	origins = new QListWidget();
+	innerLayout2->addWidget(originLabel);
+	innerLayout2->addWidget(origins);
 	
 	
 	layout->addLayout(innerLayout);
-	layout->addWidget(origins);
+	layout->addLayout(innerLayout2);
 	
 	setLayout(layout);
 	
 
-	
+	textline->setFocus();
 	// Register a callback on the textline's returnPressed signal
 	// so that we can send the message entered by the user.
 	connect(router, SIGNAL(newOrigin(const QString&)),
@@ -279,45 +341,10 @@ ChatDialog::ChatDialog(Router *r)
 	connect(origins, SIGNAL(itemDoubleClicked(QListWidgetItem*)),
 		this, SLOT(openEmptyPrivateChat(QListWidgetItem*)));
 
-	connect(fileButton, SIGNAL(pressed()),
-		this, SLOT(fileButtonClicked()));
 			 
 	
 }
 
-void
-ChatDialog::fileButtonClicked()
-{
-  //qDebug() << "file button clicked\n";
-  
-  // First disable the button from being
-  // clicked until we're done selecting files.
-  fileButton->setDown(true);
-  
-  // Setup a new file menu.
-  fileMenu = new QFileDialog(this);
-  fileMenu->setFileMode(QFileDialog::ExistingFiles);
-  
-  // Connect the signal for file selection to 
-  // the corresponding slot.
-  connect(fileMenu, SIGNAL(filesSelected(const QStringList &)),
-	  this, SLOT(filesSelected(const QStringList &)));
-  
-  fileMenu->show();  
-}
-
-void
-ChatDialog::filesSelected(const QStringList & files)
-{   
-  
-  int len = files.count();
-  for(int i = 0; i < len; ++i)
-    qDebug() << files[i] << '\n';
-
-  //delete(fileMenu);
-  fileButton->setDown(false);  
-  emit indexFiles(files);
-}
 
 void 
 ChatDialog::addOrigin(const QString& origin)
@@ -1151,7 +1178,7 @@ int main(int argc, char **argv)
 	mainWidget.show();
 
 
-	QObject::connect(&dialog, SIGNAL(indexFiles(const QStringList&)),
+	QObject::connect(&fileDialog, SIGNAL(indexFiles(const QStringList&)),
 			 &sock, SLOT(processFiles(const QStringList&)));
 	QObject::connect(&dialog, SIGNAL(sendMessage(const QString&)),
 			 &sock, SLOT(gotSendMessage(const QString&)));
