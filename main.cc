@@ -109,6 +109,8 @@ FileDialog::newSearch()
     connect(newSearch, SIGNAL(download(const QString&, const QString&, const QByteArray&)),
 	    m_fr, SLOT(newDownload(const QString&, const QString&, const QByteArray&)));
     
+    connect(newSearch, SIGNAL(close(const QString &)),
+	    this, SLOT(closeBox(const QString& )));
     
     newSearch->show();
     emit newRequest(query);
@@ -187,7 +189,7 @@ DownloadBox::gotDoubleClick(QListWidgetItem *item)
 void
 DownloadBox::closeEvent(QCloseEvent *e)
 {
-  emit close(m_search);
+  emit close(m_search);  
 }
 
 
@@ -1042,103 +1044,107 @@ void NetSocket::sendNeighbor(const QVariantMap &msg, quint32 neighbor)
 
 void NetSocket::readData()
 {
+  int count = 0;
+  while(this->hasPendingDatagrams()){
   
+    if (count > 0){
+      qDebug() << "looping ... " << count;
+    }
+    const qint64 size = this->pendingDatagramSize();
+    if (size == -1){
+      ////qDebug() << "NetSocket::readData() -- Error signalled for new data, but nothing present";
+      ////qDebug() << '\n';
+      return;
+    }
+    char data[size];
+
+    QHostAddress senderAddress;
+    quint16 port = 0;
   
-  const qint64 size = this->pendingDatagramSize();
-  if (size == -1){
-    ////qDebug() << "NetSocket::readData() -- Error signalled for new data, but nothing present";
-    ////qDebug() << '\n';
-    return;
-  }
-  char data[size];
+    if (size != this->readDatagram(data, size, &senderAddress, &port)){
+      ////qDebug() << "NetSocket::readData() -- Error reading data from socket. Sizes don't match!!!";
+    }
 
-  QHostAddress senderAddress;
-  quint16 port = 0;
+    ////qDebug() << "NetSocket::readData() -- just received a datagram!!!";
+
+    neighborList.addNeighbor(senderAddress, port);
+
+    QByteArray arr(data, size);
+    QVariantMap items;
   
-  if (size != this->readDatagram(data, size, &senderAddress, &port)){
-    ////qDebug() << "NetSocket::readData() -- Error reading data from socket. Sizes don't match!!!";
-  }
-
-  ////qDebug() << "NetSocket::readData() -- just received a datagram!!!";
-
-  neighborList.addNeighbor(senderAddress, port);
-
-  QByteArray arr(data, size);
-  QVariantMap items;
+    QDataStream stream(arr);
+    stream >> items;
   
-  QDataStream stream(arr);
-  stream >> items;
-  
-  ////qDebug() << "Checking if message is rumor or status..."; //Debug Message to make sure we receive the right stuff!!!
+    ////qDebug() << "Checking if message is rumor or status..."; //Debug Message to make sure we receive the right stuff!!!
 
 
-  // Rumor message:
-  if (items.contains("Origin") &&
-      items.contains("SeqNo")){
+    // Rumor message:
+    if (items.contains("Origin") &&
+	items.contains("SeqNo")){
    
     
-    if (items.contains("LastIP") && items.contains("LastPort")){
+      if (items.contains("LastIP") && items.contains("LastPort")){
       
-      //qDebug() << items;
-      QHostAddress holeIP(items["LastIP"].toInt());
-      quint16 holePort = items["LastPort"].toInt();
-      neighborList.addNeighbor(holeIP, holePort);
-    }
+	//qDebug() << items;
+	QHostAddress holeIP(items["LastIP"].toInt());
+	quint16 holePort = items["LastPort"].toInt();
+	neighborList.addNeighbor(holeIP, holePort);
+      }
     
-    router->processRumor(items, senderAddress, port);    
+      router->processRumor(items, senderAddress, port);    
 
-    ////qDebug() << "Rumor!!!";
-    ////qDebug() << items;
+      ////qDebug() << "Rumor!!!";
+      ////qDebug() << items;
     
 
     
-    items["LastIP"] = senderAddress.toIPv4Address();
-    items["LastPort"] = port;
+      items["LastIP"] = senderAddress.toIPv4Address();
+      items["LastPort"] = port;
     
-    bool isRumorMessage = items.contains("ChatText");
-    if (updateVector(items, isRumorMessage)){
+      bool isRumorMessage = items.contains("ChatText");
+      if (updateVector(items, isRumorMessage)){
 
-      sendStatusMessage(senderAddress, port);
+	sendStatusMessage(senderAddress, port);
       
-      if (isRumorMessage)
-	newRumor();
-      else
-	broadcastMessage(items);      
+	if (isRumorMessage)
+	  newRumor();
+	else
+	  broadcastMessage(items);      
+      }
     }
-  }
 
 
-  // Status message:
-  else if (items.contains("Want") && !(items.contains("ChatText"))){
+    // Status message:
+    else if (items.contains("Want") && !(items.contains("ChatText"))){
 					
 
-    ////qDebug() << "Status!!!";
-    newStatus(items, senderAddress, port);
+      ////qDebug() << "Status!!!";
+      newStatus(items, senderAddress, port);
     
-  }
+    }
 
   
-  else if(items.contains("Dest") &&
-	  items.contains("Origin") &&
-	  items.contains("HopLimit")){
+    else if(items.contains("Dest") &&
+	    items.contains("Origin") &&
+	    items.contains("HopLimit")){
 	
-    //qDebug() << "private message";
+      //qDebug() << "private message";
 
-    router->receiveMessage(items);
+      router->receiveMessage(items);
     
-    ////qDebug() << "Unexpected Message";
-    ////qDebug() << items;
-  }
+      ////qDebug() << "Unexpected Message";
+      ////qDebug() << items;
+    }
 
-  else if (items.contains("Origin") &&
-	   items.contains("Search") &&
-	   items.contains("Budget")){
-    qDebug() << "sending to dispatcher";
-    emit toDispatcher(items);
+    else if (items.contains("Origin") &&
+	     items.contains("Search") &&
+	     items.contains("Budget")){
+      qDebug() << "sending to dispatcher";
+      emit toDispatcher(items);
+    }
+  
+    ++count;
   }
-  
-  
-  
     
 	   
   ////qDebug() << '\n';

@@ -14,8 +14,8 @@ FileRequests::FileRequests(const QString& my_name)
   QObject::connect(&timer, SIGNAL(timeout()),
   		   this, SLOT(processTimeout()));
   
-  QObject::connect(&downloadTimer, SIGNAL(timeout()),
-		   this, SLOT(processDownloadTimeout()));
+   QObject::connect(&downloadTimer, SIGNAL(timeout()),
+  		   this, SLOT(processDownloadTimeout()));
 }
 
 void
