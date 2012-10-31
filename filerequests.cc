@@ -9,10 +9,10 @@ FileRequests::FileRequests(const QString& my_name)
 {
   me = my_name;
   timerDuration = 1000;
-  //timer.start(timerDuration);
+  timer.start(timerDuration);
   downloadTimer.start(timerDuration);
-  //QObject::connect(&timer, SIGNAL(timeout()),
-  //		   this, SLOT(processTimeout()));
+  QObject::connect(&timer, SIGNAL(timeout()),
+  		   this, SLOT(processTimeout()));
   
   QObject::connect(&downloadTimer, SIGNAL(timeout()),
 		   this, SLOT(processDownloadTimeout()));
@@ -252,15 +252,15 @@ FileRequests::processDownloadTimeout()
   
   QList<QByteArray> masters = pendingDownloadData.keys();
   for(int i = 0; i < masters.count(); ++i){
-    qDebug() << "here";
+
     if (!invertBlockHashes.contains(masters[i])){
 	
-      qDebug() << "not here";
+
 	QString destination = pendingDownloads[masters[i]].second;
 	QMap<QString, QVariant> msg;
 	
 	msg["BlockRequest"] = masters[i];
-	qDebug() << "retry!";
+
 	emit sendDownloadMsg(msg, destination);
       }
   }
