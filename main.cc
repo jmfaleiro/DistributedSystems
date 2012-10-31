@@ -16,6 +16,123 @@
 #include "main.hh"
 #include "router.hh"
 #include "helper.hh"
+#include "dispatcher.hh"
+
+FileDialog::FileDialog(FileRequests *fr)
+{
+  text = new TextEntryWidget(this);
+  m_fr = fr;
+  
+  connect(text, SIGNAL(returnPressed()),
+	  this, SLOT(newSearch()));
+
+  connect(this, SIGNAL(newRequest(const QString&)),
+	  fr, SLOT(newSearch(const QString&)));
+
+  connect(fr, SIGNAL(newResponse(const QString &, const QMap<QString, QVariant>&)),
+	  this, SLOT(newSearchResult(const QString &, const QMap<QString, QVariant> &)));
+  
+  connect(this, SIGNAL(destroyRequest(const QString &)),
+	  fr, SLOT(destroyRequest(const QString &)));
+		       
+}
+
+void
+FileDialog::newSearch()
+{
+  QString query = text->toPlainText();
+  text->clear();
+  qDebug() << "New request!";
+  if (!activeRequests.contains(query)){
+
+    DownloadBox * newSearch = new DownloadBox(query);
+    
+    activeRequests[query] = newSearch;    
+    
+    connect(newSearch, SIGNAL(download(const QString&, const QString&, const QByteArray&)),
+	    m_fr, SLOT(newDownload(const QString&, const QString&, const QByteArray&)));
+    
+    
+    newSearch->show();
+    emit newRequest(query);
+  }  
+}
+
+
+void
+FileDialog::newSearchResult(const QString &query, const QMap<QString, QVariant> &response)
+{
+  if (activeRequests.contains(query)){
+    
+    qDebug() << "FileDialog: got new search result for " << query;
+    DownloadBox *search = activeRequests[query];
+    search->newResult(response);
+  }
+}
+
+void
+FileDialog::closeBox(const QString &query)
+{
+  if (activeRequests.contains(query)){
+    
+    qDebug() << "Killed window";
+    emit destroyRequest(query);
+    DownloadBox *searchBox = activeRequests[query];
+    activeRequests.remove(query);
+    delete(searchBox);
+
+  }
+}
+
+DownloadBox::DownloadBox(const QString& search)
+{
+  m_search = search;
+  QString titleString = "Searching for... ";
+  titleString.append(search);
+  setWindowTitle(titleString);
+  
+  results = new QListWidget();
+  layout = new QVBoxLayout();
+  layout->addWidget(results);
+  
+  setLayout(layout);  
+
+  connect(results, SIGNAL(itemDoubleClicked(QListWidgetItem*)),
+	  this, SLOT(gotDoubleClick(QListWidgetItem*)));
+}
+
+DownloadBox::~DownloadBox()
+{
+  results->~QListWidget();
+  layout->~QVBoxLayout();
+}
+
+void
+DownloadBox::newResult(const QMap<QString, QVariant> &msg)
+{
+  qDebug() << "DownloadBox: got new search result" << msg["Name"].toString();
+  QListWidgetItem *item = new QListWidgetItem(msg["Name"].toString());
+  item->setData(1, msg);
+  results->addItem(item);
+}
+
+void
+DownloadBox::gotDoubleClick(QListWidgetItem *item)
+{
+  QMap<QString, QVariant> data = (item->data(1)).toMap();
+
+  qDebug() << "Start download!!!";
+  emit download(data["Name"].toString(),
+		data["Origin"].toString(),
+		data["ID"].toByteArray());
+}
+
+void
+DownloadBox::closeEvent(QCloseEvent *e)
+{
+  emit close(m_search);
+}
+
 
 
 // BEGIN: PrivateChatDialog
@@ -317,8 +434,12 @@ NetSocket::NetSocket()
 	messageIdCounter = 1;
 	
 
+	dispatcher = new Dispatcher(&fs, this);
+	QObject::connect(this, SIGNAL(toDispatcher(const QMap<QString, QVariant>&)),
+			 dispatcher, SLOT(processRequest(const QMap<QString, QVariant>&)));
 
-
+	QObject::connect(dispatcher, SIGNAL(sendNeighbor(const QMap<QString, QVariant>&, quint32)),
+			 this, SLOT(sendNeighbor(const QMap<QString, QVariant> &, quint32)));
 
 
 
@@ -487,6 +608,25 @@ bool NetSocket::bind()
 			//qDebug() << p;
 			
 			router->me = myNameString;
+			
+			fileRequests = new FileRequests(myNameString);
+			
+
+			connect(fileRequests, SIGNAL(sendDownloadMsg(QMap<QString, QVariant>&, const QString&)),
+				router, SLOT(sendMap(QMap<QString, QVariant>&, const QString&)));
+
+			connect(router, SIGNAL(blockRequest(const QMap<QString, QVariant> &)),
+				dispatcher, SLOT(processRequest(const QMap<QString, QVariant> &)));
+
+			connect(router, SIGNAL(toFileRequests(const QMap<QString, QVariant> &)),
+				fileRequests, SLOT(processReply(const QMap<QString, QVariant> &)));
+			
+			connect(dispatcher, SIGNAL(reply(QMap<QString, QVariant>&, const QString &)),
+				router, SLOT(sendMap(QMap<QString, QVariant>&, const QString&)));
+
+			connect(fileRequests, SIGNAL(broadcastRequest(const QMap<QString, QVariant> &)),
+				this, SLOT(broadcastMessage(const QMap<QString, QVariant>&)));
+
 			////qDebug() << "Finished intialization!!!";
 			return true;
 		}
@@ -840,7 +980,7 @@ void NetSocket::newStatus(const QVariantMap& message,
 }
   
 
-void NetSocket::broadcastMessage(const QVariantMap & msg)
+void NetSocket::broadcastMessage(const QMap<QString, QVariant> & msg)
 {
   QList<QPair<QHostAddress, quint16> > neighbors = neighborList.getAllNeighbors();
   
@@ -852,6 +992,23 @@ void NetSocket::broadcastMessage(const QVariantMap & msg)
 			neighbors[i].second);
   }
 }
+
+quint32
+NetSocket::numNeighbors()
+{
+  return neighborList.getAllNeighbors().count();
+}
+
+void NetSocket::sendNeighbor(const QVariantMap &msg, quint32 neighbor)
+{
+  QPair<QHostAddress, quint16> addr = neighborList.getAllNeighbors()[neighbor];
+  
+  this->writeDatagram(Helper::SerializeMap(msg),
+		      addr.first,
+		      addr.second);
+}
+
+
 
 // Read data from the network and redirect the message for analysis to 
 // either newRumor or newStatus.
@@ -934,11 +1091,10 @@ void NetSocket::readData()
   }
 
   
-  else if (items.contains("Dest") &&
-	   items.contains("ChatText") &&
-	   items.contains("HopLimit") &&
-	   items.contains("Origin")){
-
+  else if(items.contains("Dest") &&
+	  items.contains("Origin") &&
+	  items.contains("HopLimit")){
+	
     //qDebug() << "private message";
 
     router->receiveMessage(items);
@@ -946,6 +1102,17 @@ void NetSocket::readData()
     ////qDebug() << "Unexpected Message";
     ////qDebug() << items;
   }
+
+  else if (items.contains("Origin") &&
+	   items.contains("Search") &&
+	   items.contains("Budget")){
+    qDebug() << "sending to dispatcher";
+    emit toDispatcher(items);
+  }
+  
+  
+  
+    
 	   
   ////qDebug() << '\n';
 }
@@ -972,16 +1139,23 @@ int main(int argc, char **argv)
 	NetSocket sock;
 	if (!sock.bind())
 		exit(1);
-
+	
+	QTabWidget mainWidget;
+	
 	ChatDialog dialog(sock.router);
-	dialog.show();
+	FileDialog fileDialog(sock.fileRequests);
+	//dialog.show();
 	
-	
+	mainWidget.addTab(&dialog, "Chats");
+	mainWidget.addTab(&fileDialog, "Transfers");
+	mainWidget.show();
+
 
 	QObject::connect(&dialog, SIGNAL(indexFiles(const QStringList&)),
 			 &sock, SLOT(processFiles(const QStringList&)));
 	QObject::connect(&dialog, SIGNAL(sendMessage(const QString&)),
 			 &sock, SLOT(gotSendMessage(const QString&)));
+
 	
 	QObject::connect(sock.router, SIGNAL(privateMessage(const QString&, const QString&)),
 			 &dialog, SLOT(newPrivateMessage(const QString&, const QString&)));
@@ -997,7 +1171,10 @@ int main(int argc, char **argv)
 	QObject::connect(&dialog, SIGNAL(addPeer(const QString&)),
 			 &sock, SLOT(addHost(const QString&)));
 
-	QTimer::singleShot(0, &sock, SLOT(routeRumorTimeout()));		 
+	QTimer::singleShot(0, &sock, SLOT(routeRumorTimeout()));
+
+
+
 	
 	// Enter the Qt main loop; everything else is event driven
 	return app.exec();

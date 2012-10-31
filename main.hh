@@ -21,12 +21,109 @@
 #include <QAbstractButton>
 #include <QFileDialog>
 #include <QStringList>
+#include <QTabWidget>
 
 #include <files.hh>
+#include <filerequests.hh>
 #include <neighbors.hh>
 
 
 class Router;
+class Dispatcher;
+
+class TextEntryWidget : public QTextEdit
+{
+  Q_OBJECT
+
+
+
+public:
+  TextEntryWidget(QWidget *parent);
+
+protected:
+  void keyPressEvent ( QKeyEvent* e);
+
+signals:
+  void returnPressed();
+
+};
+
+
+class DownloadBox : public QDialog
+{
+  Q_OBJECT
+
+public:
+  DownloadBox(const QString& query);
+  ~DownloadBox();
+
+signals:
+
+    void
+    download(const QString& fileName, const QString&destination, const QByteArray& masterBlock);
+											       
+    void
+    close(const QString &query);
+
+
+    void
+    destroyRequest(const QString &query);										       
+  
+public slots:
+  
+  void
+  newResult(const QMap<QString, QVariant>& msg);
+
+  void
+  gotDoubleClick(QListWidgetItem *item);
+  
+  void
+  closeEvent(QCloseEvent *e);
+  
+private:
+  
+  QVBoxLayout *layout;
+  QListWidget *results;
+
+  
+  QString m_search;
+
+};
+
+
+class FileDialog : public QDialog
+{
+  Q_OBJECT
+  
+public:
+  FileDialog(FileRequests *fr);
+
+public slots:
+  
+  void
+  newSearch();
+  
+  void
+  closeBox(const QString &query);
+
+  void
+  newSearchResult(const QString &query, const QMap<QString, QVariant> &response);
+
+
+signals:
+  
+  void
+  destroyRequest(const QString &queryString);
+  
+  void
+  newRequest(const QString &queryString);
+
+private:
+  
+  FileRequests *m_fr;
+  TextEntryWidget *text;
+  QHash<QString, DownloadBox *> activeRequests;
+};
 
 
 class PrivateChatDialog : public QDialog
@@ -72,22 +169,6 @@ private:
 };
 
 
-class TextEntryWidget : public QTextEdit
-{
-  Q_OBJECT
-
-
-
-public:
-  TextEntryWidget(QWidget *parent);
-
-protected:
-  void keyPressEvent ( QKeyEvent* e);
-
-signals:
-  void returnPressed();
-
-};
 
 class ChatDialog : public QDialog
 {
@@ -142,11 +223,15 @@ public:
 
 	// Bind this socket to a Peerster-specific default port.
 	bool bind();
+  
+        quint32 numNeighbors();
+        
+        FileRequests *fileRequests;
 	Router *router;
 public slots:
   // This function communicates a new message from the dialog.
   void gotSendMessage(const QString &s);
-
+  
   // This function reads data from the network. It is connected to 
   // QUdpSocket's readyRead signal.
   void readData();
@@ -162,6 +247,10 @@ public slots:
 
   void newRumor();
   void addHost(const QString& s);
+  
+  void sendNeighbor(const QMap<QString, QVariant>& msg, quint32 index);
+
+  void broadcastMessage(const QMap<QString, QVariant>& msg);
 
 signals:
   // This signal is connected to a display method in the dialog to 
@@ -173,6 +262,7 @@ signals:
   
   void startRouteRumorTimer(int msec);
 
+  void toDispatcher(const QMap<QString, QVariant>& msg);
   //void processFiles(const QStringList & files);
 
 private:
@@ -223,7 +313,7 @@ private:
   bool expectedRumor(const QVariantMap& rumor, QString* origin, quint32* expected);
   bool updateVector(const QVariantMap& rumor, bool routeMessage);
 
-  void broadcastMessage(const QVariantMap& msg);
+
 
   QVariantMap EMPTY_VARIANT_MAP;
   
@@ -253,6 +343,8 @@ private:
   bool noForward;
   
   FileStore fs;
+  Dispatcher *dispatcher;
+  
   
 };
 

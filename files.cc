@@ -6,7 +6,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariant>
-
+#include <QFileInfo>
 
 #include <files.hh>
 
@@ -51,9 +51,9 @@ FileStore::IndexSingleFile(const QString& inputFile)
     return;
   }
   
-  qint64 size = file.size();
+  
   QDataStream fileStream(&file);
-  HashBlocks(fileStream, inputFile);
+  HashBlocks(fileStream, inputFile, 0);
 
   /*
   QList<QVariant> fileHash = ConvertBytes(HashFinalBlock(HashBlocks(fileStream)));
@@ -71,6 +71,19 @@ FileStore::IndexSingleFile(const QString& inputFile)
   
   files[inputFile] = fileDetails;
   */
+}
+
+QList<QVariant>
+FileStore::ConvertStrings(const QList<QString>&strings)
+{
+  QList<QVariant> ret;
+  int i;
+  for(i = 0; i < strings.count(); ++i){
+    
+    QVariant stringAsVariant(strings[i]);
+    ret << stringAsVariant;
+  }
+  return ret;
 }
 
 QList<QVariant>
@@ -92,42 +105,52 @@ FileStore::ConvertBytes(const QList<QByteArray>&bytes)
  *  with the meta list.
  */
 void
-FileStore::HashBlocks(QDataStream& s, const QString& fileName)
+FileStore::HashBlocks(QDataStream& s, const QString& fileName, quint32 level)
 {  
   char data[BLOCK_SIZE];
   int numRead;
   
   QByteArray result;
-  QDataStream resultStream(&result, QIODevice::Append);
-  qint64 resultSize = 0;
+  // QDataStream resultStream(&result, QIODevice::Append);  
 
+  int count = 0;
   while((numRead = s.readRawData(data, BLOCK_SIZE)) != -1){
     
-    QByteArray hashArray = Hash(data, numRead);
-    quint32 hash = ConvertHash(hashArray);
-    MapBlock(hash, data, numRead, fileName);
+    QByteArray hash = Hash(data, numRead);
+    MapBlock(hash, data, numRead, fileName, level);
     
-    resultStream.writeRawData(hashArray.data(), BLOCK_SIZE);
-    resultSize += HASH_SIZE;
-    
+    result += hash;
+    ++count;
     if (numRead < BLOCK_SIZE)
       break;
+    
   }
   
-  if (resultSize > BLOCK_SIZE){
+  qDebug() << "Hashed " << count << " blocks";
+  qDebug() << "num hashes = " << (result.size() / 32);
+  if (result.size() % 32 != 0){
+    
+    qDebug() << "Hash result is not a multiple of 32";
+    *((int *)NULL) = 1;             
+  }
+  
+  if (result.size() > BLOCK_SIZE){
     
     QDataStream resultROStream(&result, QIODevice::ReadOnly);
-    HashBlocks(resultROStream, fileName);
+    HashBlocks(resultROStream, fileName, level+1);
   }  
   
   // We need to add one more master block.
   else {
     
-    QByteArray hashArray = Hash(result.data(), resultSize);
-    quint32 hash = ConvertHash(hashArray);
-    MapBlock(hash, result.data(), resultSize, fileName);    
+    QByteArray hash = Hash(result.data(), result.size());
+    MapBlock(hash, result.data(), result.size(), fileName, level+1);    
+    MapMaster(hash, level+1, fileName);
+    qDebug() << hash << " done";
+    qDebug() << hash.size();
   }
 }
+
 
 QByteArray
 FileStore::Hash(const char *data, int size)
@@ -135,7 +158,13 @@ FileStore::Hash(const char *data, int size)
   QCA::Hash shaHash("sha256");
   
   shaHash.update(data, size);
-  return shaHash.final().toByteArray();
+  QByteArray temp = shaHash.final().toByteArray();
+  if (temp.size() != HASH_SIZE){
+    qDebug() << "Unexpected hash size";
+    *((int *)NULL) = 1;        
+  }
+  return temp;
+  
 }
 
 quint32
@@ -143,6 +172,7 @@ FileStore::ConvertHash(const QByteArray& arr)
 {
   bool ok;
   QString hashAsString = QCA::arrayToHex(arr);
+  qDebug() << hashAsString;
   quint32 hash = hashAsString.toUInt(&ok, 16);
   
   if (!ok){
@@ -154,44 +184,100 @@ FileStore::ConvertHash(const QByteArray& arr)
 }
 
 void
-FileStore::MapBlock(quint32 hash,
-		    const char *data,
-		    int size,
-		    const QString& fileName)
+FileStore::MapMaster(QByteArray hash,
+		     quint32 level,
+		     const QString& fileName)
 {
-  QByteArray block(data, size);
+  QFileInfo fileInfo(fileName);
+  QMap<QString, QVariant> val;
   
-  QMap<QString, QVariant> val;  
-  
-  val["name"] = fileName;
-  val["block"] = block;
-  
-  files[hash] = val;
+  val["fullname"] = fileName;
+  val["level"] = level;
+  val["block"] = hash;
+
+  fileMeta.insertMulti(fileInfo.fileName(), val);
 }
 
-/*
-QByteArray
-FileStore::ReturnBlock(quint32 index)
+void
+FileStore::MapBlock(QByteArray hash,
+		    const char *data,
+		    int size,
+		    const QString& fileName,
+		    quint32 level)
 {
-  QList<QMap<QString, QVariant> > values = files.values();
+  QByteArray block(data, size);
+  QFileInfo fileInfo(fileName);
+  QMap<QString, QVariant> val;  
   
-  for(int i = 0; i < values.count(); ++i){
+  val["fullname"] = fileName;
+  val["filename"] = fileInfo.fileName();
+  val["block"] = block;  
+  val["level"] = level;  
+  blockMap[hash] = val;  
+}
+
+
+
+bool
+FileStore::Search(const QString& query, QMap<QString, QVariant> *ret)
+{
+  qDebug() << "FileStore: got search request for " << query;
+  bool isPresent = false;
+  QList<QString> keys = fileMeta.keys();
+  
+  QList<QString> retFiles;
+  QList<QByteArray> retBlocks;
+
+  for(int i = 0; i < keys.count(); ++i){
     
-    QList<QVariant> fileHash = values[i]["hash"].toList();
-    
-    for(int j = 0; j < fileHash.count(); ++j){
+    if(Match(query, keys[i])){
+      isPresent = true;
+      QList<QMap<QString, QVariant> > vals = fileMeta.values(keys[i]);
       
+      qDebug() << "FileStore: found something";
       
+      for(int j = 0; j < vals.count(); ++j){
+	
+	retFiles.append(keys[i]);
+	retBlocks.append(vals[j]["block"].toByteArray());
+      }
     }
+      
+  }
+  
+  (*ret)["MatchNames"] = ConvertStrings(retFiles);
+  (*ret)["MatchIDs"] = ConvertBytes(retBlocks);
+  (*ret)["SearchReply"] = query;
+
+  return isPresent;
+}
+
+bool
+FileStore::Match(const QString& query, const QString& key)
+{
+  QStringList keyWords = query.split(" ", QString::SkipEmptyParts);
+  
+  for(int i = 0; i < keyWords.count(); ++i)
+    if (key.contains(keyWords[i]))
+      return true;
+
+
+  return false;
+}
+
+bool
+FileStore::ReturnBlock(QByteArray index, QByteArray *ptr, QByteArray *indexPtr)
+{
+  if (!blockMap.contains(index)){
+    return false;
+  }
+  else{
     
+    QMap<QString, QVariant> value = blockMap[index];
+    *ptr = value["block"].toByteArray();
+    *indexPtr = index;
+    return true;
   }
 }
 
-// If this function is called, then its'
-// safe read 4 bytes.
-quint32
-FileStore::ParseInt(char *data)
-{
-  
-}
-*/
+

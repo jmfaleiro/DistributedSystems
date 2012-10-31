@@ -1,8 +1,7 @@
 #ifndef FILES_HH
 #define FILES_HH
 
-#define BLOCK_SIZE 8192 
-#define HASH_SIZE 32
+#include <fileconstants.hh>
 
 #include <QObject>
 #include <QString>
@@ -14,6 +13,7 @@
 #include <QVariant>
 #include <QVariantMap>
 #include <QMap>
+#include <QUuid>
 
 class FileStore : public QObject
 {
@@ -23,22 +23,36 @@ public:
 
   FileStore();
 
+  bool
+  Search(const QString& query, QMap<QString, QVariant> *ret);
+
+  bool
+  ReturnBlock(QByteArray index, QByteArray *ptr, QByteArray *indexPtr);    
+
+	  
 public slots:
 
   void
   IndexFiles(const QStringList & files);
+  
+  
 
 private:
   
   QList<QVariant>
   ConvertBytes(const QList<QByteArray> & hashes);
+
+  
+  QList<QVariant>
+  ConvertStrings(const QList<QString>&strings);
+
   
   void
   IndexSingleFile(const QString& file);
   
   
   void
-  HashBlocks(QDataStream& s, const QString& fileName);
+  HashBlocks(QDataStream& s, const QString& fileName, quint32 level);
 
   
   QByteArray
@@ -48,15 +62,23 @@ private:
   ConvertHash(const QByteArray& arr);
 
   void
-  MapBlock(quint32 hash,
+  MapBlock(QByteArray hash,
 	   const char *data,
 	   int size,
-	   const QString& fileName);
+	   const QString& fileName,
+	   quint32 level);
 
 
-    
+  void
+  MapMaster(QByteArray hash,
+	    quint32 level,
+	    const QString& fileName);
+
+  bool
+  Match(const QString &query, const QString &key);
   
-  QHash<quint32, QMap<QString, QVariant> > files;
+  QHash<QByteArray, QMap<QString, QVariant> > blockMap;
+  QHash<QString, QMap<QString, QVariant> > fileMeta;
 
 };
 

@@ -29,6 +29,10 @@ public slots:
 void
 sendMessage(const QString& message, const QString& destination);
 
+void
+sendMap(QMap<QString, QVariant> &mesg,
+	const QString &destination);
+
 void 
 receiveMessage(QVariantMap& msg);
   
@@ -39,6 +43,12 @@ privateMessage(const QString&message, const QString &origin);
 
 void 
 newOrigin(const QString& origin);
+
+void
+toFileRequests(const QMap<QString, QVariant> &msg);
+
+void
+blockRequest(const QMap<QString, QVariant>&msg);
   
 private:
   QHash<QString, QPair<QHostAddress, quint16> > routingTable;

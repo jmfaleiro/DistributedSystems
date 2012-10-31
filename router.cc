@@ -75,6 +75,20 @@ Router::sendMessage(const QString& message,const QString& destination)
 
 
 
+void
+Router::sendMap(QMap<QString, QVariant>& msg, const QString& destination)
+{
+  msg["Dest"] = destination;
+  msg["HopLimit"] = HOP_LIMIT;
+  msg["Origin"] = me;  
+  
+  QByteArray arr = Helper::SerializeMap(msg);
+  QPair<QHostAddress, quint16> dest = routingTable[destination];
+  sock->writeDatagram(arr, dest.first, dest.second);
+
+  //qDebug() << msg;
+}
+
 void 
 Router::receiveMessage(QVariantMap& msg)
 {
@@ -83,9 +97,20 @@ Router::receiveMessage(QVariantMap& msg)
   QString destination = msg["Dest"].toString();
   int hopLimit = msg["HopLimit"].toInt();
   
+
   if (destination == me){
     
-    emit privateMessage(msg["ChatText"].toString(), msg["Origin"].toString());
+    if (msg.contains("ChatText"))
+      emit privateMessage(msg["ChatText"].toString(), msg["Origin"].toString());
+    else if (msg.contains("BlockRequest")){
+      qDebug() << "Got block request, sending to dispatcher";
+      emit blockRequest(msg);
+    }
+    else if ((msg.contains("BlockReply") && msg.contains("Data")) ||
+	     (msg.contains("SearchReply") && msg.contains("MatchNames") && msg.contains("MatchIDs"))){
+      qDebug() << "Got reply, sending to filerequests";
+      emit toFileRequests(msg);
+    }
   }
   
   else if (!noForward && hopLimit > 0){
