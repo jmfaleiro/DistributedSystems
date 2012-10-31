@@ -564,7 +564,7 @@ bool NetSocket::bind()
 			
 		  */	
 		  
-			
+		  qDebug() << "port: " << p;
 			for (quint16 q = qMyPortMin; q <= qMyPortMax; q++) {
 			  
 			  if (p != q){			    
