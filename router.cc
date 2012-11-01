@@ -66,11 +66,14 @@ Router::sendMessage(const QString& message,const QString& destination)
   
 
   QByteArray arr = Helper::SerializeMap(messageMap);
-  
-  QPair<QHostAddress, quint16> dest = routingTable[destination];
-  //  qDebug() << "Sending: " << message;
-  //qDebug() << dest.first << ":" << dest.second;
-  sock->writeDatagram(arr, dest.first, dest.second);
+
+  if (routingTable.contains(destination)){
+    
+    QPair<QHostAddress, quint16> dest = routingTable[destination];
+    //  qDebug() << "Sending: " << message;
+    //qDebug() << dest.first << ":" << dest.second;
+    sock->writeDatagram(arr, dest.first, dest.second);
+  }
 }
 
 
@@ -83,8 +86,11 @@ Router::sendMap(QMap<QString, QVariant>& msg, const QString& destination)
   msg["Origin"] = me;  
   
   QByteArray arr = Helper::SerializeMap(msg);
-  QPair<QHostAddress, quint16> dest = routingTable[destination];
-  sock->writeDatagram(arr, dest.first, dest.second);
+  if (routingTable.contains(destination)){
+    
+    QPair<QHostAddress, quint16> dest = routingTable[destination];
+    sock->writeDatagram(arr, dest.first, dest.second);
+  }
 
   //qDebug() << msg;
 }
