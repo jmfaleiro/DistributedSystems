@@ -1,51 +1,71 @@
 #include <paxos.hh>
 
-/*
-  msg["Round"] = round;
-  msg["Proposal"] = proposal;
-  msg["Phase1"] = 0;
-msg["Sender"]
+Acceptor::Acceptor()
+{
 
- Acceptor messages: "Proposal"                => propsal number
-                     "Round"                   => round number
-		     "Accepted"                => If contains key, then has accepted 
-		     "Value"                   => value accepted
-*/
-
+}
 
 void
-Acceptor::tryPromise(QVariantMap msg)
+Acceptor::tryPromise(const QVariantMap& msg)
 {
 
   quint32 round = msg["Round"].toUInt();
   ProposalNumber p = msg["Proposal"].value<ProposalNumber>();
   QString origin = msg["Origin"].toString();
-  QVariant reply
-
-  if (commits.contains(round)){
-    
-    // Reply negatively
-  }
   
-  else if (p > maxPromise[round]){
-    
-    maxPromise.insert(round, p);
+  QVariantMap reply;
+  
+  if (p > maxPromise[round]){
+
     // Reply with the appropriate values
+    ProposalNumber lastPromise = maxPromise[round];
+    maxPromise.insert(round, p);
+    PaxosCodes pc;
+    reply["Round"] = round;
+    reply["Proposal"] = QVariant::fromValue(p);
+
+    if (acceptValues.contains(round)){
+      
+      pc = PROMISEVALUE;
+      
+      reply["Value"] = acceptValues[round];
+      reply["AcceptedProp"] = QVariant::fromValue(acceptProposals[round]);
+    }
+    
+    else {
+      
+      pc = PROMISENOVALUE;      
+    }  
+    
+    reply["Paxos"] = pc;
   }
   
   emit singleReceiver(reply, origin);
 }
 
 void
-Acceptor::tryAccept(QVariantMap msg)
+Acceptor::tryAccept(const QVariantMap& msg)
 {
   quint32 round = msg["Round"].toUInt();
-  QString proposal = msg["Proposal"].toString();
+  QVariantMap value = msg["Value"].toMap();
+  ProposalNumber proposal = msg["Proposal"].value<ProposalNumber>();
+
+  QString origin = msg["Origin"].toString();
   
   if (proposal >= maxPromise[round]){
-    accepts.insert(round, proposal);
-
     
+    acceptProposals.insert(round, proposal);
+    acceptValues.insert(round, value);
+
+    QVariantMap reply;
+    PaxosCodes pc = ACCEPT;
+    
+    reply["Paxos"] = (int)pc;
+    reply["Round"] = round;
+    reply["Value"] = value;
+    reply["Proposal"] = QVariant::fromValue(proposal);
+    
+    emit singleReceiver(reply, origin);
   }
 }
 

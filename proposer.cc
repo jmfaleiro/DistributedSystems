@@ -1,167 +1,209 @@
 
 #include <paxos.hh>
 
+Proposer::Proposer(quint32 given_majority)
+{
+  state = IDLE;
+  majority = given_majority;
+}
+
 void
-Proposer::phase1(quint32 round, QString value, QString client)
+Proposer::phase1(quint32 round, QVariantMap value)
 {  
-  ProposalNumber::increment(prop);
+  // Generate a new, globally unique proposal number, 
+  // which doubles for a request identifier.
+  curProposal = ProposalNumber::incr(curProposal);
+  
+  // Clean up the state from the previous try.
+  uniquePhase1Replies.clear();
+  uniquePhase2Replies.clear();
+  phase1Replies.clear();  
+  
+  curValue = value;
   
   QVariantMap msg;
-  msg["Paxos"] = 0;
-  msg["Receiver"] = "Acceptor";
+  PaxosCodes pc = PHASE1;
+  
+  // Marshall the message.
+  msg["Paxos"] = (int)pc;
   msg["Round"] = round;
-  msg["Phase1"] = 0;
-  msg["ProposalNumber"] = prop; 
+  msg["Proposal"] = QVariant::fromValue(curProposal);
 
-  QVariantMap clientInfo;
-  clientInfo["Client"] = client;
-  clientInfo["Round"] = round;
-  clientInfo["Value"] = value;
-  
-  clientInfoMap[prop] = clientInfo;
-
-  broadcastMsg(msg);
+  // Set the state for accepting messages from acceptors, 
+  // broadcast the proposal and start the timeout timer.
+  state = PHASE1;  
+  emit broadcastMessage(msg);
+  roundTimer.start(PAXOS_REQUEST_TIMEOUT);
 }
 
 void
-Proposer::respondClient(bool good)
+Proposer::processTimeout()
 {
-  QVariantMap reply;
-  
-  QVariantMap clientInfo = clientInfoMap[prop];
-  
-  reply["Paxos"] = 0;
-  reply["Round"] = response["Round"].toUInt();
-  reply["Value"] = clientInfo["Value"].toString();
-  reply["Done"] = false;
-  
-  emit singleReceiver(reply, clientInfo["Client"].toString());
+  // If we got a timeout, it doesn't matter in which phase of Paxos 
+  // we were in. We quit and signal that we didn't succeed.  
+  roundTimer.stop();
+  state = IDLE;
+  emit proposalTimeout();
 }
 
-void
-Proposer::killProposal(ProposalNumber p)
-{
-  
-}
-
+// This method processes a response from an acceptor which says that the
+// round has already completed. We may have already processed such a message
+// before, so make sure that it corresponds to the current proposal.
+// It can only be processed when we are in state phase1. Avoid the case
+// where we might see it in a later state. It's ok because the round will
+// not succeed anyway. 
 void
 Proposer::processFailed(QVariantMap response)
 {
-  ProposalNumber p = response["Proposal"].value<ProposalNumber>();
-  killProposal(p);
-  respondClient(false);  
+  ProposalNumber proposal= response["Proposal"].value<ProposalNumber>();
+  
+  if (state == PHASE1){
+    
+    if (curProposal == proposal){
+    
+      roundTimer.stop();
+      state = IDLE;
+  
+      quint32 round = response["Round"].toUInt();
+      QVariantMap value = response["Value"].toMap();
+    
+      emit catchupInstance(round, value);
+    }
+  }
 }
 
+
+// Process a response to a phase1 message. We have to be in state phase1 to 
+// deal with such messages. 
 void
-Proposer::processPromise(QVariantMap response)
+Proposer::processPromise(const QVariantMap& response)
 {
-  ProposalNumber promised = response["Promise"].value<ProposalNumber>();
-  QString origin = response["Origin"].toString();
-
-  if (!tombstones.contains(promised) && clientInfoMap.contains(promised)){
-  
-      QSet<QString> replies = uniquePhase1Replies[promised];
-
-      if (!replies.contains(origin)){    
+  if (state == PHASE1){
     
-	replies.insert(origin);
-	phase1Replies[promised].append(response);
-    
-	if(replies.count() == neighbors.getAllNeighbors().count()){
-      
-	  // start the phase2
-	  phase2(promised);
+    ProposalNumber promised = response["Proposal"].value<ProposalNumber>();
+
+    // Check if the response is to the request we're currently processing.
+    if (promised == curProposal){
+
+      // Idempotence: Make sure we don't process a promise from the same origin more
+      //              than once. 
+      QString origin = response["Origin"].toString();      
+      if (!uniquePhase1Replies.contains(origin)){
+	
+	uniquePhase1Replies.insert(origin);
+	phase1Replies.append(response);
+	
+	// If we have a majority of responses: 
+	//   1) Stop the timer.
+	//   2) Stop processing more messages.
+	//   3) Move to phase2.
+	if(uniquePhase1Replies.count() >=  majority){
+	  
+	  roundTimer.stop();
+	  state = PROCESSING;
+	  phase2();
 	}
-      }
-  }    
+      }      
+    }
+  }
 }
 
 void
 Proposer::processAccept(QVariantMap response)
 {
-  ProposalNumber proposal = response["Proposal"].value<ProposalNumber>();
-  QString origin = response["Origin"].toString();
-
-  if(!tombstones.contains(proposal) && pendingProposals.contains(proposal)){
+  if(state == PHASE2){
     
-    QSet<QString> replies = uniquePhase2Replies[proposal];
-    if(!replies.contains(origin)){
+    ProposalNumber proposal = response["Proposal"].value<ProposalNumber>();
+    
+    // Check if the response is to the request we're currently processing.
+    if (curProposal == proposal){
       
-      replies.insert(origin);
-      if(replies.count() == neighbors.getAllNeighbors().count()){
+      // Idempotence check: ensure that you don't count replies twice. 
+      QString origin = response["Origin"].toString();
+      if(!uniquePhase2Replies.contains(origin)){
 	
-	broadcastCommit(proposal);
-      }
+	uniquePhase2Replies.insert(origin);
+	
+	// If we have enough replies, commit!
+	if(uniquePhase2Replies.count() == majority){
+	  
+	  roundTimer.stop();
+	  state = PROCESSING;
+	  broadcastCommit(proposal);
+	}
+      }      
     }
   }
 }
 
 void
 Proposer::broadcastCommit(ProposalNumber p)
-{
-  QVariantMap clientInfo = clientInfoMap[p];
-  quint32 round = clientInfo["Round"].toUInt();
-  QString value = pendingProposals[p];
-
+{  
   QVariantMap msg;
-  msg["Paxos"] = 0;
-  msg["Commit"] = 0;
-  msg["Value"] = value;
-  msg["Round"] = round;
+  PaxosCodes pc = COMMIT;
 
-  emit broadcastMessage(msg);
-  
-  killProposal(p);
+  msg["Paxos"] = (int)pc;
+  msg["Value"] = acceptValue;
+  msg["Round"] = curRound;
+
+  emit broadcastMessage(msg);  
+  emit catchupInstance(curRound, acceptValue);
 }
 
+// We reach this method when we have dealt with a majority of 
+// promises from our neighbors.
 void
-Proposer::phase2(ProposalNumber p)
+Proposer::phase2()
 {
-  QList<QVariantMap> responses = phase1Replies[p];
-  
-  QPair<ProposalNumber, QString> value = checkAccepted(responses);
-  
-  quint32 round = clientInfoMap[p]["Round"].toUInt();
+  // Check if any of the acceptors have already accepted a value before.
+  // If yes, then make sure that you don't report 
+  QPair<ProposalNumber, QVariantMap> value = checkAccepted();
 
-  QString acceptValue = value.second;
-  if(value.first == 0)
-    acceptValue = pendingProposals[p];
-    
+  // Value of the highest accepted proposal for this round.
+  acceptValue = value.second;
+  if(value.first.number == 0)
+    acceptValue = curValue;
+
   QVariantMap msg;
-  msg["Paxos"] = 0;
-  msg["Round"] = round;
+  PaxosCodes pc = PHASE2;
+  
+  msg["Paxos"] = (int)pc;
+  msg["Round"] = curRound;  
   msg["Value"] = acceptValue;
-  msg["Proposal"] = p;
-  msg["Phase2"] = 0;
-  msg["Receiver"] = "Acceptor";
+  msg["Proposal"] = QVariant::fromValue(curProposal);
 
+  state = PHASE2;
   emit broadcastMessage(msg);
+  roundTimer.start(PAXOS_REQUEST_TIMEOUT);
 }    
   
-QPair<ProposalNumber, QString> 
-Proposer::checkAccepted(QList<QVariantMap> responses)
+QPair<ProposalNumber, QVariantMap> 
+Proposer::checkAccepted()
 {
-  
+  int i;
   ProposalNumber p;
   p.number = 0;
   p.name = "";
-  QString value;
+  QVariantMap value;
 
-  for(i = 0; i < responses.count(); ++i){
+  for(i = 0; i < phase1Replies.count(); ++i){
     
-    QVariantMap response = responses[i];
+    QVariantMap response = phase1Replies[i];
+    PaxosCodes msgCode = (PaxosCodes)response["Paxos"].toInt();
     
-    if (response.contains("Value")){
+    if (msgCode == PROMISEVALUE){
 
-      ProposalNumber rProposal = response["Proposal"].value<ProposalNumber>();
+      ProposalNumber rProposal = response["AcceptedProp"].value<ProposalNumber>();
       if(p < rProposal){
 	
 	p = rProposal;
-	value = response["Value"].toString();
+	value = response["Value"].toMap();
       }
     }
   }
 
-  QPair<ProposalNumber, QString> ret (p, value);
+  QPair<ProposalNumber, QVariantMap> ret;
+  ret.first = p;
+  ret.second = value;
   return ret;
 }

@@ -79,13 +79,15 @@ Router::sendMessage(const QString& message,const QString& destination)
 
 
 void
-Router::sendMap(QMap<QString, QVariant>& msg, const QString& destination)
+Router::sendMap(const QMap<QString, QVariant>& msg, const QString& destination)
 {
-  msg["Dest"] = destination;
-  msg["HopLimit"] = HOP_LIMIT;
-  msg["Origin"] = me;  
+  QMap<QString, QVariant> real_msg = msg;
   
-  QByteArray arr = Helper::SerializeMap(msg);
+  real_msg["Dest"] = destination;
+  real_msg["HopLimit"] = HOP_LIMIT;
+  real_msg["Origin"] = me;  
+  
+  QByteArray arr = Helper::SerializeMap(real_msg);
   if (routingTable.contains(destination)){
     
     QPair<QHostAddress, quint16> dest = routingTable[destination];
@@ -109,13 +111,17 @@ Router::receiveMessage(QVariantMap& msg)
     if (msg.contains("ChatText"))
       emit privateMessage(msg["ChatText"].toString(), msg["Origin"].toString());
     else if (msg.contains("BlockRequest")){
-      qDebug() << "Got block request, sending to dispatcher";
+      //qDebug() << "Got block request, sending to dispatcher";
       emit blockRequest(msg);
     }
     else if ((msg.contains("BlockReply") && msg.contains("Data")) ||
 	     (msg.contains("SearchReply") && msg.contains("MatchNames") && msg.contains("MatchIDs"))){
-      qDebug() << "Got reply, sending to filerequests";
+      //qDebug() << "Got reply, sending to filerequests";
       emit toFileRequests(msg);
+    }
+    else if (msg.contains("Paxos")){
+      qDebug() << "Got paxos message, sending to paxos";
+      emit toPaxos(msg);
     }
   }
   

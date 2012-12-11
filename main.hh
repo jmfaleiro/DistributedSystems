@@ -23,6 +23,7 @@
 #include <QStringList>
 #include <QTabWidget>
 
+#include <paxos.hh>
 #include <files.hh>
 #include <filerequests.hh>
 #include <neighbors.hh>
@@ -30,6 +31,8 @@
 
 class Router;
 class Dispatcher;
+
+
 
 class TextEntryWidget : public QTextEdit
 {
@@ -94,6 +97,29 @@ private:
 
 };
 
+class PaxosDialog: public QDialog
+{
+  Q_OBJECT
+
+public:
+  PaxosDialog(Router *r, QList<QString> participants);
+
+signals:
+  void
+  newRequest(const QString &value);
+
+public slots:
+  void
+  newValue(quint32 round, const QString &value);
+  void
+  gotReturnPressed();
+  
+private:
+  
+  Paxos *paxos;
+  QTextEdit *valueDisplay;  
+  QLineEdit *valueAdder;
+};
 
 class FileDialog : public QDialog
 {
@@ -235,7 +261,7 @@ public:
 	NetSocket();
 
 	// Bind this socket to a Peerster-specific default port.
-	bool bind();
+  bool bind(QList<QString> &nodes);
   
         quint32 numNeighbors();
         

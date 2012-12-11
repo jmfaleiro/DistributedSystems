@@ -12,5 +12,5 @@ CONFIG += debug crypto
 
 
 # Input
-HEADERS += main.hh neighbors.hh router.hh helper.hh files.hh dispatcher.hh filerequests.hh
-SOURCES += main.cc neighbors.cc router.cc helper.cc files.cc dispatcher.cc filerequests.cc
+HEADERS += main.hh neighbors.hh router.hh helper.hh files.hh dispatcher.hh filerequests.hh paxos.hh
+SOURCES += main.cc neighbors.cc router.cc helper.cc files.cc dispatcher.cc filerequests.cc paxos.cc proposer.cc acceptor.cc

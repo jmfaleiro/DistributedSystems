@@ -30,7 +30,7 @@ void
 sendMessage(const QString& message, const QString& destination);
 
 void
-sendMap(QMap<QString, QVariant> &mesg,
+sendMap(const QMap<QString, QVariant> &mesg,
 	const QString &destination);
 
 void 
@@ -49,6 +49,9 @@ toFileRequests(const QMap<QString, QVariant> &msg);
 
 void
 blockRequest(const QMap<QString, QVariant>&msg);
+
+void
+toPaxos(const QMap<QString, QVariant>&msg);
   
 private:
   QHash<QString, QPair<QHostAddress, quint16> > routingTable;

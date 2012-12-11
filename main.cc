@@ -19,6 +19,56 @@
 #include "helper.hh"
 #include "dispatcher.hh"
 
+PaxosDialog::PaxosDialog(Router *r, QList<QString> participants)
+{
+  paxos = new Paxos(participants);
+  valueDisplay = new QTextEdit(this);
+  valueAdder = new QLineEdit(this);
+
+  QVBoxLayout *layout = new QVBoxLayout();
+  QLabel *learnedValues = new QLabel("Learned values:");
+  QLabel *commitValue = new QLabel("Commit a value:");
+  
+  layout->addWidget(learnedValues);
+  layout->addWidget(valueDisplay);
+  layout->addWidget(commitValue);
+  layout->addWidget(valueAdder);
+  
+  setLayout(layout);
+  
+  valueAdder->setFocus();
+
+  // Connect our client to paxos.
+  connect(this, SIGNAL(newRequest(const QString&)),
+	  paxos, SLOT(clientRequest(const QString&)));
+
+  connect(paxos, SIGNAL(newValue(quint32, const QString&)),
+	  this, SLOT(newValue(quint2, const QString&)));
+  
+
+  // Connect the router to paxos.
+  connect(paxos, SIGNAL(sendP2P(const QVariantMap&, const QString&)),
+	  r, SLOT(sendMap(const QMap<QString, QVariant>&, const QString&)));
+  connect(r, SIGNAL(toPaxos(const QMap<QString, QVariant>&)),
+	  paxos, SLOT(newMessage(const QVariantMap&)));
+}
+
+void
+PaxosDialog::gotReturnPressed()
+{
+  emit newRequest (valueAdder->text());
+  valueAdder->clear();
+}
+
+void
+PaxosDialog::newValue(quint32 round,const  QString&  value)
+{
+  QString toDisplay = QString::number(round, 10);
+  toDisplay += " :> ";
+  toDisplay += value;
+  valueDisplay->append(toDisplay);
+}
+
 FileDialog::FileDialog(FileRequests *fr)
 {
   m_fr = fr;
@@ -53,9 +103,7 @@ FileDialog::FileDialog(FileRequests *fr)
 	  fr, SLOT(destroyRequest(const QString &)));
 
   connect(fileButton, SIGNAL(pressed()),
-	  this, SLOT(fileButtonClicked()));
-
-		       
+	  this, SLOT(fileButtonClicked()));		       
 }
 
 
@@ -550,7 +598,7 @@ void NetSocket::processAntiEntropyTimeout()
 
 
 
-bool NetSocket::bind()
+bool NetSocket::bind(QList<QString> &paxosNodes)
 {
 	// Try to bind to each of the range myPortMin..myPortMax in turn.
   quint16 qMyPortMin = (quint16) myPortMin;
@@ -610,7 +658,23 @@ bool NetSocket::bind()
 			QStringList args = QCoreApplication::arguments();
 			
 			int max = args.count();
+			bool inPaxos = false;
+			bool donePaxos = false;
+
 			for(int i = 1; i < max; ++i){
+			  
+			  if (!inPaxos && !donePaxos && (args[i] == "-paxos-nodes"))
+			    inPaxos = true;
+
+			  if(inPaxos){			    			    
+			    if (args[i][0] == '-'){
+			      inPaxos = false;
+			      donePaxos = true;
+			    }	
+			    else{
+			      paxosNodes.append(args[i]);			    
+			    }
+			  }		      
 			  
 			  ////qDebug() << args[i];			  
 			  addHost(args[i]);
@@ -622,15 +686,23 @@ bool NetSocket::bind()
 			  }
 			}
 			
-		
+			if(!(paxosNodes.count() > 0)){
+			  
+			  qDebug() << "Node identifiers not specified, exiting...";
+			  exit(0);
+			}
 			
 			router = new Router(this, noForward);
 			
+			myNameString = paxosNodes[0];
+
+			/*
 			QTextStream stream(&myNameString);
 			
 			stream << QUuid::createUuid();
 			
 			stream << (QDateTime::currentDateTime()).toTime_t();
+			*/
 			
 			myNameVariant = QVariant(myNameString);
 			
@@ -1170,17 +1242,20 @@ int main(int argc, char **argv)
 	
 	// Create a UDP network socket
 	NetSocket sock;
-	if (!sock.bind())
+	QList<QString> paxosList;
+	if (!sock.bind(paxosList))
 		exit(1);
 	
 	QTabWidget mainWidget;
 	
 	ChatDialog dialog(sock.router);
 	FileDialog fileDialog(sock.fileRequests);
+	PaxosDialog paxosDialog(sock.router, paxosList);
 	//dialog.show();
 	
 	mainWidget.addTab(&dialog, "Chats");
 	mainWidget.addTab(&fileDialog, "Transfers");
+	mainWidget.addTab(&paxosDialog, "Paxos");
 	mainWidget.show();
 
 

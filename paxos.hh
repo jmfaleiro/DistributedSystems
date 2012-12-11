@@ -6,35 +6,47 @@
 #include <QVariant>
 #include <QString>
 #include <QVariantMap>
+#include <QTimer>
+#include <QUuid>
+#include <QSet>
+#include <assert.h>
+
+#define PAXOS_REQUEST_TIMEOUT 3000
 
 class ProposalNumber : public QObject{
+
+  Q_OBJECT
 
 public:
   ProposalNumber();
   
   ProposalNumber(quint64 number, QString name);
   
-  ProposalNumber(const &ProposalNumber other);
+  ProposalNumber(const ProposalNumber &other);
   
   ~ProposalNumber();
   
-  friend bool
-  operator> (const ProposalNumber & first, const ProposalNumber & second);
+  bool
+  operator> (const ProposalNumber & second) const;
   
-  friend bool
-  operator>= (const ProposalNumber& first, const ProposalNumber &second);
+  bool
+  operator>= (const ProposalNumber &second) const;
 
-  friend bool
-  operator== (const ProposalNumber& first, const ProposalNumber &second);
+  bool
+  operator== (const ProposalNumber &second) const;
 
-  friend bool
-  operator< (const ProposalNumber& first, const ProposalNumber &second);
+  bool
+  operator< (const ProposalNumber &second) const;
 
-  friend bool
-  operator<= (const ProposalNumber& first, const ProposalNumber &second);
-
-  static void incr(ProposalNumber & p);
-
+  bool
+  operator<= (const ProposalNumber &second) const;
+  
+  ProposalNumber
+  operator= (const ProposalNumber &second);
+  
+  static ProposalNumber 
+  incr(const ProposalNumber &p);  
+  
   quint64 number;
   QString name;
   
@@ -42,131 +54,167 @@ public:
 
 Q_DECLARE_METATYPE(ProposalNumber)
 
+enum PaxosCodes {
+  
+  // From the proposer.
+  PHASE1 = 1,
+  PHASE2 = 3,
+  COMMIT = 5,
+  IDLE = 7,
+  PROCESSING = 9,
+  
+
+  // From the acceptor.
+  REJECT = 0,
+  PROMISEVALUE = 2,
+  PROMISENOVALUE = 4,
+  ACCEPT = 6,
+};
+
 class Proposer : public QObject {
 
   Q_OBJECT
 
 public:
 
+  Proposer(quint32 given_majority);  
 
+signals:
 
-  void
-  propose(QString round, ProposalNumber proposal, QString value);
+    void
+    catchupInstance(quint32 round, QVariantMap value);					   
+    void
+    proposalTimeout();
+    void
+    broadcastMessage(const QVariantMap& msg);
 
 public slots:
   
   void 
-  phase1 (QString value);
-
-  void 
-  phase2 (quint32 round, ProposalNumber proposal, QList<QVariantMap> responses);
+  phase1 (quint32 round, QVariantMap value);
+  void
+  processFailed(QVariantMap response);
+  void
+  processPromise(const QVariantMap& response);
+  void
+  processAccept(QVariantMap response);
 
 private:
+
+  void
+  phase2();
+  QPair<ProposalNumber, QVariantMap> 
+  checkAccepted();
+  void
+  processTimeout();
+  void
+  broadcastCommit(ProposalNumber p);
   
-  ProposalNumber prop;
-
-  QMap<ProposalNumber, QVariantMap> clientInfoMap;
-
-  QMap<ProposalNumber, QString> pendingProposals;
-
-  QMap<ProposalNumber, QSet<QString> > uniquePhase1Replies;
-  QMap<ProposalNumber, QList<QVariantMap> > phase1Replies;
-
-  QMap<ProposalNumber, QSet<QString> > uniquePhase2Replies;
-
-  QMap<ProposalNumber, int> tombstones;
-
-  // A well defined set of neighbors
-  NeighborList neighbors;  
-  QString nodeName;  
-
-  QMap<quint32, ProposalNumber> proposalTracker;
-  QMap<quint32, QVariant> valueTracker;
+  PaxosCodes state;
+  quint32 majority;
   
-  quint32 maxRound;
+  QTimer roundTimer;
+  ProposalNumber curProposal;
+  
+  QVariantMap curValue;
+  QVariantMap acceptValue;
+  
+  quint32 curRound;
+
+  QSet<QString> uniquePhase1Replies;
+  QList<QVariantMap> phase1Replies;
+  QSet<QString> uniquePhase2Replies;
 };
 
 class Acceptor : public QObject {
   
   Q_OBJECT
 
+public:  
+  Acceptor();
+
+signals:
+    void
+    singleReceiver(const QVariantMap &msg, const QString origin);
+
 public slots:
-
   void
-  tryPromise(QVariantMap msg);
-
+  tryPromise(const QVariantMap& msg);
   void
-  tryAccept(QVariantMap msg);
-
+  tryAccept(const QVariantMap& msg);
+ 
 private:
 
   QMap<quint32, ProposalNumber> maxPromise;
-  QMap<quint32, QString> accepts;
-  QMap<quint32, QString> commits;
-};
-
-class Learner : public QObject { 
-
-  Q_OBJECT
-  
-public signals:
-  
-  void 
-  newValue(quint32 round, QString value);
-
-public slots:
-  void
-  recentlyAccepted(QVariantMap msg);
-
-  
-private:  
-  void
-  roundSafe(quint32 round);
-  
-  QMap<quint32, QMap<QString, QString> > accepts;
+  QMap<quint32, QVariantMap> acceptValues;
+  QMap<quint32, ProposalNumber> acceptProposals;  
 };
 
 class Paxos : public QObject {
   
   Q_OBJECT
+
+
+public:
+
+  Paxos(QList<QString> participants);
   
 public slots:
   
   void
-  broadcastMsg(QVariantMap msg);
-
+  broadcastMsg(const QVariantMap &msg);
   void
-  newMessage(QVariantMap msg);
-
+  newMessage(const QVariantMap & msg);
+  void
+  sendSingle(const QVariantMap& reply, const  QString& dest);
+  void
+  clientRequest(const QString& value);
+  void
+  proposerTimeoutFailure();
+  void
+  laggingRoundNumber(quint32 round, const QVariantMap& value);
+  
 signals:
 
   void
-  gotPhase1Message(QVariant msg);
-  
+  rejectMessage(const QVariantMap& msg);
   void
-  gotPhase2Message(QVariant msg);
-  
+  promiseMessage(const QVariantMap& msg);
   void
-  gotPromiseMessage(QVariant msg);
-  
+  acceptMessage(const QVariantMap& msg);
   void
-  gotAcceptedMessage(QVariant msg);
-  
+  phase1Message(const QVariantMap& msg);
   void
-  gotMajorityPromises(quint32 round, ProposalNumber proposal, QVariantMap promises);
+  phase2Message(const QVariantMap& msg);
+  void
+  commitMessage(const QVariantMap& msg);
+  void
+  newValue(quint32 round, const QString &value);
+  void
+  sendP2P(const QVariantMap& reply, const QString& destination);
 
 private:
-
-  QList<QString> participants;
   
-  QMap<quint32, QVariantMap> promises;
+  QString
+  newId();
+  void
+  processPhase1(const QVariantMap& msg);
+  
+  void
+  commit(QVariantMap msg);
+
+  QMap<quint32, QVariantMap> commits;
+  
+  quint32 maxSafeRound;
+  
+  QList<QVariantMap> pendingRequests;
+  
+  QList<QString> participants;
 
   QString me;
-  Router router;
-
-  Proposer proposer;
-  Acceptor acceptor;
-  Learner learner;  
+  
+  Proposer *proposer;
+  Acceptor *acceptor;
 };
 
 #endif
