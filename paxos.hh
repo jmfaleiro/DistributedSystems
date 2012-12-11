@@ -12,7 +12,7 @@
 #include <QMetaType>
 #include <assert.h>
 
-#define PAXOS_REQUEST_TIMEOUT 3000
+#define PAXOS_REQUEST_TIMEOUT 1000
 
 class ProposalNumber : public QObject{
 
@@ -100,6 +100,8 @@ public slots:
   processPromise(const QVariantMap& response);
   void
   processAccept(const QVariantMap& response);
+  void
+  processTimeout();
 
 private:
 
@@ -108,15 +110,13 @@ private:
   QPair<ProposalNumber, QVariantMap> 
   checkAccepted();
   void
-  processTimeout();
-  void
   broadcastCommit(ProposalNumber p);
   
   PaxosCodes state;
   quint32 majority;
   
-  QTimer roundTimer;
   ProposalNumber curProposal;
+  QTimer roundTimer;
   
   QVariantMap curValue;
   QVariantMap acceptValue;

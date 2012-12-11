@@ -8,7 +8,10 @@ Proposer::Proposer(quint32 given_majority, QString my_name)
   majority = given_majority;
 
   curProposal.number = 1;
-  curProposal.name = my_name;
+  curProposal.name = my_name;  
+  
+  connect(&roundTimer, SIGNAL(timeout()),
+	  this, SLOT(processTimeout()));
   
   curProposal = ProposalNumber::incr(curProposal);
   qDebug() << "Proposer:Initialized proposal="<<curProposal.number<<" "<<curProposal.name<<" majority="<<majority;
@@ -46,12 +49,14 @@ Proposer::phase1(quint32 round, QVariantMap value)
   // broadcast the proposal and start the timeout timer.
   state = PHASE1;  
   emit broadcastMessage(msg);
-  roundTimer.start(PAXOS_REQUEST_TIMEOUT);
+  roundTimer.start(200);
+  assert(roundTimer.isActive());
 }
 
 void
 Proposer::processTimeout()
 {
+  qDebug() << "Proposer: Got timeout!";
   // If we got a timeout, it doesn't matter in which phase of Paxos 
   // we were in. We quit and signal that we didn't succeed.  
   roundTimer.stop();
@@ -115,8 +120,8 @@ Proposer::processPromise(const QVariantMap& response)
 	if(uniquePhase1Replies.count() >=  majority){
 	  
 	  roundTimer.stop();
-	  qDebug() << "Proposer: promise count > majority="<<majority;
 	  state = PROCESSING;
+	  qDebug() << "Proposer: promise count > majority="<<majority;
 	  phase2();
 	}
       }      
@@ -196,7 +201,8 @@ Proposer::phase2()
 
   state = PHASE2;
   emit broadcastMessage(msg);
-  roundTimer.start(PAXOS_REQUEST_TIMEOUT);
+  roundTimer.start(200);
+  assert(roundTimer.isActive());
 }    
   
 QPair<ProposalNumber, QVariantMap> 
