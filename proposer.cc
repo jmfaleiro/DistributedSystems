@@ -1,10 +1,17 @@
 
 #include <paxos.hh>
+#include <QDebug>
 
-Proposer::Proposer(quint32 given_majority)
+Proposer::Proposer(quint32 given_majority, QString my_name)
 {
   state = IDLE;
   majority = given_majority;
+
+  curProposal.number = 1;
+  curProposal.name = my_name;
+  
+  curProposal = ProposalNumber::incr(curProposal);
+  qDebug() << "Proposer:Initialized proposal="<<curProposal.number<<" "<<curProposal.name<<" majority="<<majority;
 }
 
 void
@@ -20,15 +27,21 @@ Proposer::phase1(quint32 round, QVariantMap value)
   phase1Replies.clear();  
   
   curValue = value;
+  curRound = round;
   
   QVariantMap msg;
   PaxosCodes pc = PHASE1;
   
+  QVariant proposalVar;
+  proposalVar.setValue(curProposal);
+  
   // Marshall the message.
   msg["Paxos"] = (int)pc;
   msg["Round"] = round;
-  msg["Proposal"] = QVariant::fromValue(curProposal);
+  msg.insert("Proposal", proposalVar);
 
+  qDebug() << "Proposer: phase1: round="<<round<<", proposal="<<curProposal.number<<" "<<curProposal.name;
+  
   // Set the state for accepting messages from acceptors, 
   // broadcast the proposal and start the timeout timer.
   state = PHASE1;  
@@ -53,7 +66,7 @@ Proposer::processTimeout()
 // where we might see it in a later state. It's ok because the round will
 // not succeed anyway. 
 void
-Proposer::processFailed(QVariantMap response)
+Proposer::processFailed(const QVariantMap& response)
 {
   ProposalNumber proposal= response["Proposal"].value<ProposalNumber>();
   
@@ -67,6 +80,7 @@ Proposer::processFailed(QVariantMap response)
       quint32 round = response["Round"].toUInt();
       QVariantMap value = response["Value"].toMap();
     
+      qDebug() << "Proposer: got paxos reject, sending to paxos";
       emit catchupInstance(round, value);
     }
   }
@@ -90,6 +104,7 @@ Proposer::processPromise(const QVariantMap& response)
       QString origin = response["Origin"].toString();      
       if (!uniquePhase1Replies.contains(origin)){
 	
+	qDebug() << "Proposer: got new promise!";
 	uniquePhase1Replies.insert(origin);
 	phase1Replies.append(response);
 	
@@ -100,6 +115,7 @@ Proposer::processPromise(const QVariantMap& response)
 	if(uniquePhase1Replies.count() >=  majority){
 	  
 	  roundTimer.stop();
+	  qDebug() << "Proposer: promise count > majority="<<majority;
 	  state = PROCESSING;
 	  phase2();
 	}
@@ -109,7 +125,7 @@ Proposer::processPromise(const QVariantMap& response)
 }
 
 void
-Proposer::processAccept(QVariantMap response)
+Proposer::processAccept(const QVariantMap& response)
 {
   if(state == PHASE2){
     
@@ -145,6 +161,8 @@ Proposer::broadcastCommit(ProposalNumber p)
   msg["Paxos"] = (int)pc;
   msg["Value"] = acceptValue;
   msg["Round"] = curRound;
+  
+  qDebug() << "Committing round:"<<curRound;
 
   emit broadcastMessage(msg);  
   emit catchupInstance(curRound, acceptValue);
@@ -167,10 +185,14 @@ Proposer::phase2()
   QVariantMap msg;
   PaxosCodes pc = PHASE2;
   
+  QVariant proposalVar;
+  proposalVar.setValue(curProposal);
+
   msg["Paxos"] = (int)pc;
   msg["Round"] = curRound;  
   msg["Value"] = acceptValue;
-  msg["Proposal"] = QVariant::fromValue(curProposal);
+  msg.insert("Proposal", proposalVar);
+  // msg["Proposal"] = proposalVar;
 
   state = PHASE2;
   emit broadcastMessage(msg);

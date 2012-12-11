@@ -102,7 +102,7 @@ class PaxosDialog: public QDialog
   Q_OBJECT
 
 public:
-  PaxosDialog(Router *r, QList<QString> participants);
+  PaxosDialog(Router *r, const QList<QString>& participants);
 
 signals:
   void

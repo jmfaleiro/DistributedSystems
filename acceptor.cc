@@ -1,4 +1,5 @@
 #include <paxos.hh>
+#include <QDebug>
 
 Acceptor::Acceptor()
 {
@@ -13,6 +14,8 @@ Acceptor::tryPromise(const QVariantMap& msg)
   ProposalNumber p = msg["Proposal"].value<ProposalNumber>();
   QString origin = msg["Origin"].toString();
   
+  qDebug() << "Acceptor: try promise for round =" << round << ", proposal ="<< p.number << " " << p.name;
+  
   QVariantMap reply;
   
   if (p > maxPromise[round]){
@@ -21,8 +24,12 @@ Acceptor::tryPromise(const QVariantMap& msg)
     ProposalNumber lastPromise = maxPromise[round];
     maxPromise.insert(round, p);
     PaxosCodes pc;
+
+    QVariant proposalVar;
+    proposalVar.setValue(p);
+    
     reply["Round"] = round;
-    reply["Proposal"] = QVariant::fromValue(p);
+    reply["Proposal"] = proposalVar;
 
     if (acceptValues.contains(round)){
       
@@ -40,15 +47,18 @@ Acceptor::tryPromise(const QVariantMap& msg)
     reply["Paxos"] = pc;
   }
   
+  qDebug() << "Acceptor: promised!";
   emit singleReceiver(reply, origin);
 }
 
 void
 Acceptor::tryAccept(const QVariantMap& msg)
-{
+{  
   quint32 round = msg["Round"].toUInt();
   QVariantMap value = msg["Value"].toMap();
   ProposalNumber proposal = msg["Proposal"].value<ProposalNumber>();
+
+  qDebug() << "Acceptor: try accept for round =" << round << ", proposal ="<< proposal.number << " " << proposal.name;  
 
   QString origin = msg["Origin"].toString();
   
@@ -60,10 +70,15 @@ Acceptor::tryAccept(const QVariantMap& msg)
     QVariantMap reply;
     PaxosCodes pc = ACCEPT;
     
+    QVariant proposalVar;
+    proposalVar.setValue(proposal);
+    
     reply["Paxos"] = (int)pc;
     reply["Round"] = round;
     reply["Value"] = value;
-    reply["Proposal"] = QVariant::fromValue(proposal);
+    reply["Proposal"] = proposalVar;
+    
+    qDebug() << "Acceptor: Accepted!";
     
     emit singleReceiver(reply, origin);
   }

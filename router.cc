@@ -81,15 +81,23 @@ Router::sendMessage(const QString& message,const QString& destination)
 void
 Router::sendMap(const QMap<QString, QVariant>& msg, const QString& destination)
 {
-  QMap<QString, QVariant> real_msg = msg;
+  QMap<QString, QVariant> real_msg;
   
-  real_msg["Dest"] = destination;
-  real_msg["HopLimit"] = HOP_LIMIT;
-  real_msg["Origin"] = me;  
+  real_msg = msg;
+  real_msg.insert("Dest", destination);
+  real_msg.insert("HopLimit", HOP_LIMIT);
+  real_msg.insert("Origin", me);
+  
+  if (destination == me){
+    
+    if (msg.contains("Paxos"))
+      emit toPaxos(real_msg);
+  }
   
   QByteArray arr = Helper::SerializeMap(real_msg);
   if (routingTable.contains(destination)){
     
+    qDebug() << real_msg;
     QPair<QHostAddress, quint16> dest = routingTable[destination];
     sock->writeDatagram(arr, dest.first, dest.second);
   }

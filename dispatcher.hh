@@ -33,7 +33,7 @@ public slots:
 
 signals:
   void
-  reply(QMap<QString, QVariant> &ret, const QString& dest);
+  reply(const QMap<QString, QVariant> &ret, const QString& dest);
 							  
   void
   sendNeighbor(const QMap<QString, QVariant> &ret, quint32 index);

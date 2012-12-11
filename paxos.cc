@@ -1,33 +1,68 @@
 #include <paxos.hh>
+#include <QDebug>
 
 // Broadcast a message, first send it to the local node
 // and then send it to the router for broadcast.
 
-Paxos::Paxos(QList<QString> given_participants)
+Paxos::Paxos(const QList<QString>& given_participants)
 {
-  assert(participants.count() >= 1);
-  me = participants[0];
+  
+  assert(given_participants.count() >= 1);
+  me = given_participants[0];
+  maxSafeRound = 1;
 
   participants = given_participants;
   
-  proposer = new Proposer((given_participants.count()/2)+1);
+  proposer = new Proposer((given_participants.count()/2)+1, me);
   acceptor = new Acceptor();
 
-  // Connect the acceptor.
+
+  // Phase 1 Message -> Acceptor
   connect(this, SIGNAL(phase1Message(const QVariantMap&)),
 	  acceptor, SLOT(tryPromise(const QVariantMap&)));
+
+  // Phase 2 Message -> Acceptor
   connect(this, SIGNAL(phase2Message(const QVariantMap&)),
 	  acceptor, SLOT(tryAccept(const QVariantMap&)));
-  connect(acceptor, SIGNAL(singleReceiver(const QVariantMap &, const QString &)),
-	  this, SLOT(sendSingle(const QVariantMap&, const  QString&)));
+
+
+
   
-  // Connect the propser.
+  
+  // PromiseMessage -> Proposer
   connect(this, SIGNAL(promiseMessage(const QVariantMap&)),
 	  proposer, SLOT(processPromise(const QVariantMap&)));
+
+  // Accept Message -> Proposer
   connect(this, SIGNAL(acceptMessage(const QVariantMap&)),
 	  proposer, SLOT(processAccept(const QVariantMap&)));
+  
+  // Reject Message -> Proposer
+  connect(this, SIGNAL(rejectMessage(const QVariantMap&)),
+	  proposer, SLOT(processFailed(const QVariantMap&)));
+
+
+
+
+  // Proposer -> broadcast message
   connect(proposer, SIGNAL(broadcastMessage(const QVariantMap&)),
 	  this, SLOT(broadcastMsg(const QVariantMap&)));
+
+  // Acceptor -> send p2p messages
+  connect(acceptor, SIGNAL(singleReceiver(const QVariantMap &, const QString &)),
+	  this, SLOT(sendSingle(const QVariantMap&, const  QString&)));
+
+
+
+
+  
+  // Catchup instance.
+  connect(proposer, SIGNAL(catchupInstance(quint32, const QVariantMap&)),
+	  this, SLOT(laggingRoundNumber(quint32, const QVariantMap&)));
+  
+  // Timeout failures.
+  connect(proposer, SIGNAL(proposalTimeout()),
+	  this, SLOT(proposerTimeoutFailure()));
   
 }
 
@@ -40,9 +75,14 @@ Paxos::clientRequest(const QString& value)
   valueMap["Id"] = requestId;
   valueMap["Value"] = value;
 
+  qDebug() << "Paxos: got new request for value="<<value;
+  
   pendingRequests.append(valueMap);
+
+  assert(pendingRequests.count() > 0);
   if(pendingRequests.count() == 1){
     
+    qDebug() << "Paxos: dispatching new request, with round="<<maxSafeRound;
     proposer->phase1(maxSafeRound, pendingRequests[0]);
   }
 }
@@ -58,10 +98,7 @@ Paxos::newId()
 void
 Paxos::broadcastMsg(const QVariantMap& msg)
 {  
-  newMessage(msg);
-
-  for(int i = 0; i < participants.count(); ++i)
-    if (participants[i] != me)
+  for(int i = 0; i < participants.count(); ++i)    
       emit sendP2P(msg, participants[i]);
 }
 
@@ -69,30 +106,39 @@ Paxos::broadcastMsg(const QVariantMap& msg)
 void
 Paxos::newMessage(const QVariantMap& msg)
 {
+  qDebug() << "Paxos: got new message!";
+  
   PaxosCodes pc = (PaxosCodes) msg["Paxos"].toInt();
 
   switch(pc){
     
   case PHASE1:
+    qDebug() << "Paxos: got phase1 message";
     processPhase1(msg);    
     break;
   case PHASE2:
+    qDebug() << "Paxos: got phase2 message";
     emit phase2Message(msg);
     break;
   case COMMIT:
+    qDebug() << "Paxos: got commit message";
     commit(msg);
     break;
     
   case REJECT:
+    qDebug() << "Paxos: got reject message";
     emit rejectMessage(msg);
     break;
   case PROMISEVALUE:
+    qDebug() << "Paxos: got promise message";
     emit promiseMessage(msg);
     break;
   case PROMISENOVALUE:
+    qDebug() << "Paxos: got promise message with no value";
     emit promiseMessage(msg);
     break;
   case ACCEPT:
+    qDebug() << "Paxos: got accept message";
     emit acceptMessage(msg);
     break;   
   default:
@@ -125,15 +171,13 @@ Paxos::processPhase1(const QVariantMap&msg)
 void
 Paxos::sendSingle(const QVariantMap& msg, const QString& destination)
 {
-  if (destination == me)
-    newMessage(msg);
-  else
-    emit sendP2P(msg, destination);
+  emit sendP2P(msg, destination);  
 }
 
 void
 Paxos::proposerTimeoutFailure()
 {
+  qDebug() << "Paxos:Retrying request with round"<<maxSafeRound;
   proposer->phase1(maxSafeRound, pendingRequests[0]);
 }
 
@@ -144,13 +188,15 @@ Paxos::commit(QVariantMap msg)
   quint32 round = msg["Round"].toUInt();
   QVariantMap value = msg["Value"].toMap();
   
-  commits.insert(round, value);  
+  commits.insert(round, value); 
+  emit newValue(round, value["Value"].toString());
 }
 
 
 void
 Paxos::laggingRoundNumber(quint32 round, const QVariantMap& value)
 {
+  qDebug() << "In lagging round number";
   assert(round == maxSafeRound);
   ++maxSafeRound;
   
@@ -164,8 +210,10 @@ Paxos::laggingRoundNumber(quint32 round, const QVariantMap& value)
   if (id == proposedId)
     pendingRequests.removeFirst();
     
-  if (pendingRequests.count() > 0)
+  if (pendingRequests.count() > 0){
+    qDebug() << "Paxos: dispatching new request with round="<<maxSafeRound;
     proposer->phase1(maxSafeRound, pendingRequests[0]);  
+  }
 }
 
 ProposalNumber::ProposalNumber()
@@ -191,13 +239,14 @@ ProposalNumber ProposalNumber::incr(const ProposalNumber &p)
   
   temp.number = p.number + 1;
   temp.name = p.name;
+  qDebug()<< "incr number="<<temp.number<<" "<<temp.name;
   return temp;
 }
 
-ProposalNumber::ProposalNumber(quint64 number, QString name)
+ProposalNumber::ProposalNumber(quint64 given_number, QString given_name)
 {
-  number = number;
-  name = name;
+  number = given_number;
+  name = given_name;
 }
 
 bool
@@ -234,8 +283,8 @@ ProposalNumber::operator>= (const ProposalNumber &second) const
 ProposalNumber
 ProposalNumber::operator= (const ProposalNumber &second)
 {
-  ProposalNumber temp;
-  temp.number = second.number;
-  temp.name = second.name;
-  return temp;
+  number = second.number;
+  name = second.name;
+  return *this;
 }
+

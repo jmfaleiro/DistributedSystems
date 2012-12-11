@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QUuid>
 #include <QSet>
+#include <QMetaType>
 #include <assert.h>
 
 #define PAXOS_REQUEST_TIMEOUT 3000
@@ -44,6 +45,8 @@ public:
   ProposalNumber
   operator= (const ProposalNumber &second);
   
+  
+  
   static ProposalNumber 
   incr(const ProposalNumber &p);  
   
@@ -51,8 +54,7 @@ public:
   QString name;
   
 };
-
-Q_DECLARE_METATYPE(ProposalNumber)
+Q_DECLARE_METATYPE(ProposalNumber);
 
 enum PaxosCodes {
   
@@ -77,12 +79,12 @@ class Proposer : public QObject {
 
 public:
 
-  Proposer(quint32 given_majority);  
+  Proposer(quint32 given_majority, QString name);  
 
 signals:
 
     void
-    catchupInstance(quint32 round, QVariantMap value);					   
+    catchupInstance(quint32 round, const QVariantMap& value);					   
     void
     proposalTimeout();
     void
@@ -93,11 +95,11 @@ public slots:
   void 
   phase1 (quint32 round, QVariantMap value);
   void
-  processFailed(QVariantMap response);
+  processFailed(const QVariantMap& response);
   void
   processPromise(const QVariantMap& response);
   void
-  processAccept(QVariantMap response);
+  processAccept(const QVariantMap& response);
 
 private:
 
@@ -157,14 +159,14 @@ class Paxos : public QObject {
 
 public:
 
-  Paxos(QList<QString> participants);
+  Paxos(const QList<QString>& participants);
   
 public slots:
   
   void
   broadcastMsg(const QVariantMap &msg);
   void
-  newMessage(const QVariantMap & msg);
+  newMessage(const QMap<QString, QVariant> & msg);
   void
   sendSingle(const QVariantMap& reply, const  QString& dest);
   void
@@ -191,7 +193,7 @@ signals:
   void
   newValue(quint32 round, const QString &value);
   void
-  sendP2P(const QVariantMap& reply, const QString& destination);
+  sendP2P(const QMap<QString, QVariant>& reply, const QString& destination);
 
 private:
   

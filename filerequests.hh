@@ -31,7 +31,7 @@ signals:
   newResponse(const QString& query, const QMap<QString, QVariant>&repsonse);
   
   void
-  sendDownloadMsg(QMap<QString, QVariant> &msg, const QString &destination);									  
+  sendDownloadMsg(const QMap<QString, QVariant> &msg, const QString &destination);									  
   
 									  
 public slots:

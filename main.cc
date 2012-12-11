@@ -19,10 +19,11 @@
 #include "helper.hh"
 #include "dispatcher.hh"
 
-PaxosDialog::PaxosDialog(Router *r, QList<QString> participants)
+PaxosDialog::PaxosDialog(Router *r, const QList<QString> &participants)
 {
   paxos = new Paxos(participants);
   valueDisplay = new QTextEdit(this);
+  valueDisplay->setReadOnly(true);
   valueAdder = new QLineEdit(this);
 
   QVBoxLayout *layout = new QVBoxLayout();
@@ -43,14 +44,17 @@ PaxosDialog::PaxosDialog(Router *r, QList<QString> participants)
 	  paxos, SLOT(clientRequest(const QString&)));
 
   connect(paxos, SIGNAL(newValue(quint32, const QString&)),
-	  this, SLOT(newValue(quint2, const QString&)));
+	  this, SLOT(newValue(quint32, const QString&)));
   
 
   // Connect the router to paxos.
-  connect(paxos, SIGNAL(sendP2P(const QVariantMap&, const QString&)),
+  connect(paxos, SIGNAL(sendP2P(const QMap<QString, QVariant>&, const QString&)),
 	  r, SLOT(sendMap(const QMap<QString, QVariant>&, const QString&)));
   connect(r, SIGNAL(toPaxos(const QMap<QString, QVariant>&)),
-	  paxos, SLOT(newMessage(const QVariantMap&)));
+	  paxos, SLOT(newMessage(const QMap<QString, QVariant>&)));
+
+  connect(valueAdder, SIGNAL(returnPressed()),
+	  this, SLOT(gotReturnPressed()));
 }
 
 void
@@ -660,33 +664,40 @@ bool NetSocket::bind(QList<QString> &paxosNodes)
 			int max = args.count();
 			bool inPaxos = false;
 			bool donePaxos = false;
-
+			
+			qDebug() << args.count();
+			
 			for(int i = 1; i < max; ++i){
 			  
 			  if (!inPaxos && !donePaxos && (args[i] == "-paxos-nodes"))
 			    inPaxos = true;
 
-			  if(inPaxos){			    			    
+			  else if(inPaxos){	
+
 			    if (args[i][0] == '-'){
 			      inPaxos = false;
 			      donePaxos = true;
 			    }	
 			    else{
+			      qDebug() << args[i];
 			      paxosNodes.append(args[i]);			    
 			    }
 			  }		      
-			  
-			  ////qDebug() << args[i];			  
-			  addHost(args[i]);
-			  
-			  if (args[i] == "-noforward"){
+			   
+			  else if (args[i] == "-noforward"){
 			    
 			    //qDebug() << "No Forwarding!!!";
 			    noForward = true;
 			  }
+			  ////qDebug() << args[i];
+			  /*
+			  else
+			  addHost(args[i]);*/
 			}
-			
-			if(!(paxosNodes.count() > 0)){
+
+
+			qDebug() << "Num paxos nodes =" << paxosNodes.count();
+			if(paxosNodes.count() == 0){
 			  
 			  qDebug() << "Node identifiers not specified, exiting...";
 			  exit(0);
@@ -713,8 +724,8 @@ bool NetSocket::bind(QList<QString> &paxosNodes)
 			fileRequests = new FileRequests(myNameString);
 			
 
-			connect(fileRequests, SIGNAL(sendDownloadMsg(QMap<QString, QVariant>&, const QString&)),
-				router, SLOT(sendMap(QMap<QString, QVariant>&, const QString&)));
+			connect(fileRequests, SIGNAL(sendDownloadMsg(const QMap<QString, QVariant>&, const QString&)),
+				router, SLOT(sendMap(const QMap<QString, QVariant>&, const QString&)));
 
 			connect(router, SIGNAL(blockRequest(const QMap<QString, QVariant> &)),
 				dispatcher, SLOT(processRequest(const QMap<QString, QVariant> &)));
@@ -722,8 +733,8 @@ bool NetSocket::bind(QList<QString> &paxosNodes)
 			connect(router, SIGNAL(toFileRequests(const QMap<QString, QVariant> &)),
 				fileRequests, SLOT(processReply(const QMap<QString, QVariant> &)));
 			
-			connect(dispatcher, SIGNAL(reply(QMap<QString, QVariant>&, const QString &)),
-				router, SLOT(sendMap(QMap<QString, QVariant>&, const QString&)));
+			connect(dispatcher, SIGNAL(reply(const QMap<QString, QVariant>&, const QString &)),
+				router, SLOT(sendMap(const QMap<QString, QVariant>&, const QString&)));
 
 			connect(fileRequests, SIGNAL(broadcastRequest(const QMap<QString, QVariant> &)),
 				this, SLOT(broadcastMessage(const QMap<QString, QVariant>&)));
@@ -1120,7 +1131,7 @@ void NetSocket::readData()
   while(this->hasPendingDatagrams()){
   
     if (count > 0){
-      qDebug() << "looping ... " << count;
+      //qDebug() << "looping ... " << count;
     }
     const qint64 size = this->pendingDatagramSize();
     if (size == -1){
@@ -1224,12 +1235,40 @@ void NetSocket::readData()
 
 // END: NetSocket
 
+
+QDataStream &
+operator<< (QDataStream &out, const ProposalNumber &myObj)
+{
+  out << myObj.number;
+  out << myObj.name;
+  return out;
+}
+  
+QDataStream &
+operator>> (QDataStream &in, ProposalNumber &myObj)
+{
+  quint64 my_number;
+  QString my_name;
+
+  in >> my_number;
+  in >> my_name;
+  
+  myObj.name = my_name;
+  myObj.number = my_number;
+  return in;
+}
+
+
 int main(int argc, char **argv)
 {
   for(int i = 0; i < argc; ++i){
     
     
   }
+  
+  qRegisterMetaType<ProposalNumber>("ProposalNumber");
+  
+  qRegisterMetaTypeStreamOperators<ProposalNumber>("ProposalNumber");
   
 	// Initialize Qt toolkit
 	QApplication app(argc,argv);
@@ -1245,6 +1284,8 @@ int main(int argc, char **argv)
 	QList<QString> paxosList;
 	if (!sock.bind(paxosList))
 		exit(1);
+	
+	qDebug() << "num nodes paxos =" << paxosList.count();
 	
 	QTabWidget mainWidget;
 	
