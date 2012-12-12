@@ -171,6 +171,9 @@ Acceptor::replayLog(const QList<QString>& log)
 	value.insert("Id", splits[4]);
 	value.insert("Value", splits[5]);
 	
+	if (maxPromise.contains(round))	  
+	  assert(p >= maxPromise[round]);
+	
 	if(acceptValues.contains(round)){
 	  
 	  temp = acceptProposals[round];

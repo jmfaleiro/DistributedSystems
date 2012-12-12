@@ -580,7 +580,7 @@ void NetSocket::routeRumorTimeout()
   
   else {
     qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
-    *((int *)NULL) = 1;
+    // *((int *)NULL) = 1;
   }  
 }
 
@@ -773,7 +773,7 @@ void NetSocket::gotSendMessage(const QString &s)
   
   else {
     qDebug() << "NetSocket::gotSendMessage -- OUT OF ORDER MESSAGE FROM MYSELF: COMMIT SUICIDE";
-    *((int *)NULL) = 1;
+    //    *((int *)NULL) = 1;
   }
 
 }
