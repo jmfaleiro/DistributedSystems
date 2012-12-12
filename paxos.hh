@@ -17,7 +17,7 @@
 #include <fstream>
 #include <string>
 
-#define PAXOS_REQUEST_TIMEOUT 1000
+#define PAXOS_REQUEST_TIMEOUT 5000
 
 class Log : public QObject {
   
