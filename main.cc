@@ -1,6 +1,7 @@
 
 #include <unistd.h>
-
+#include <ctime>
+#include <cstdlib>
 
 #include <QApplication>
 #include <QDebug>
@@ -1265,6 +1266,8 @@ int main(int argc, char **argv)
     
     
   }
+
+
   
   qRegisterMetaType<ProposalNumber>("ProposalNumber");
   

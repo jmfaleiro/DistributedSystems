@@ -7,6 +7,7 @@
 Paxos::Paxos(const QList<QString>& given_participants)
 {
 
+  retryTimer.stop();
   assert(given_participants.count() >= 1);
   me = given_participants[0];
   maxSafeRound = 1;
@@ -69,6 +70,9 @@ Paxos::Paxos(const QList<QString>& given_participants)
   // Timeout failures.
   connect(proposer, SIGNAL(proposalTimeout()),
 	  this, SLOT(proposerTimeoutFailure()));
+  
+  connect(&retryTimer, SIGNAL(timeout()),
+	  this, SLOT(buzz()));
   
 }
 
@@ -184,10 +188,19 @@ Paxos::sendSingle(const QVariantMap& msg, const QString& destination)
 void
 Paxos::proposerTimeoutFailure()
 {
-  qDebug() << "Paxos:Retrying request with round"<<maxSafeRound;
-  proposer->phase1(maxSafeRound, pendingRequests[0]);
+  int sleepTime = qrand() % 10;  
+  sleepTime *= 1000;
+  sleepTime += 1000;
+  retryTimer.start(sleepTime);  
 }
 
+void
+Paxos::buzz()
+{
+  retryTimer.stop();
+  qDebug() << "Paxos: Retrying request with round="<<maxSafeRound;
+  proposer->phase1(maxSafeRound, pendingRequests[0]);
+}
 
 void
 Paxos::commit(QVariantMap msg)

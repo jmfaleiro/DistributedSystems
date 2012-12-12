@@ -17,7 +17,7 @@
 #include <fstream>
 #include <string>
 
-#define PAXOS_REQUEST_TIMEOUT 5000
+#define PAXOS_REQUEST_TIMEOUT 1000
 
 class Log : public QObject {
   
@@ -206,7 +206,8 @@ public:
   Paxos(const QList<QString>& participants);
   
 public slots:
-  
+  void
+  buzz();
   void
   broadcastMsg(const QVariantMap &msg);
   void
@@ -271,7 +272,9 @@ private:
   QMap<quint32, QVariantMap> commits;
   
   quint32 maxSafeRound;
-  
+  QTimer retryTimer;
+
+
   QList<QVariantMap> pendingRequests;
   
   QList<QString> participants;
