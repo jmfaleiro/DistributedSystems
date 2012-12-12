@@ -4,6 +4,7 @@
 
 Proposer::Proposer(quint32 given_majority, QString my_name)
 {
+  retryTimer.stop();
   state = IDLE;
   majority = given_majority;
 
@@ -22,10 +23,50 @@ Proposer::Proposer(quint32 given_majority, QString my_name)
   connect(&roundTimer, SIGNAL(timeout()),
 	  this, SLOT(processTimeout()));
   
-
+  connect(&retryTimer, SIGNAL(timeout()),
+	  this, SLOT(buzz()));
 
   incrementProposalNumber();
   qDebug() << "Proposer:Initialized proposal="<<curProposal.number<<" "<<curProposal.name<<" majority="<<majority;
+}
+
+
+void
+Proposer::buzz()
+{
+  QVariantMap msg;
+  if (state == PHASE1){
+    
+    PaxosCodes pc = PHASE1;
+    retryTimer.stop();
+    
+    QVariant proposalVar;
+    proposalVar.setValue(curProposal);
+    
+    // Marshall the message.
+    msg["Paxos"] = (int)pc;
+    msg["Round"] = curRound;
+    msg.insert("Proposal", proposalVar);
+    
+    emit broadcastMessage(msg);
+    retryTimer.start(PROPOSER_RETRY_TIMEOUT);
+  }
+  else if (state == PHASE2){
+    
+    retryTimer.stop();
+    QVariant proposalVar;
+    proposalVar.setValue(curProposal);
+
+    PaxosCodes pc = PHASE2;
+       
+    msg["Paxos"] = (int)pc;
+    msg["Round"] = curRound;  
+    msg["Value"] = acceptValue;
+    msg.insert("Proposal", proposalVar);  
+    
+    emit broadcastMessage(msg);
+    retryTimer.start(PROPOSER_RETRY_TIMEOUT);
+  }
 }
 
 void
@@ -108,6 +149,7 @@ Proposer::phase1(quint32 round, QVariantMap value)
   state = PHASE1;  
   emit broadcastMessage(msg);
   roundTimer.start(PAXOS_REQUEST_TIMEOUT);
+  retryTimer.start(PROPOSER_RETRY_TIMEOUT);
   assert(roundTimer.isActive());
 }
 
@@ -118,6 +160,7 @@ Proposer::processTimeout()
   // If we got a timeout, it doesn't matter in which phase of Paxos 
   // we were in. We quit and signal that we didn't succeed.  
   roundTimer.stop();
+  retryTimer.stop();
   state = IDLE;
   emit proposalTimeout();
 }
@@ -138,6 +181,7 @@ Proposer::processFailed(const QVariantMap& response)
     if (curProposal == proposal){
     
       roundTimer.stop();
+      retryTimer.stop();
       state = IDLE;
   
       quint32 round = response["Round"].toUInt();
@@ -178,6 +222,7 @@ Proposer::processPromise(const QVariantMap& response)
 	if(uniquePhase1Replies.count() >=  majority){
 	  
 	  roundTimer.stop();
+	  retryTimer.stop();
 	  state = PROCESSING;
 	  qDebug() << "Proposer: promise count > majority="<<majority;
 	  phase2();
@@ -207,6 +252,7 @@ Proposer::processAccept(const QVariantMap& response)
 	if(uniquePhase2Replies.count() == majority){
 	  
 	  roundTimer.stop();
+	  retryTimer.stop();
 	  state = PROCESSING;
 	  broadcastCommit(proposal);
 	}
@@ -260,6 +306,7 @@ Proposer::phase2()
   state = PHASE2;
   emit broadcastMessage(msg);
   roundTimer.start(PAXOS_REQUEST_TIMEOUT);
+  retryTimer.start(PROPOSER_RETRY_TIMEOUT);
   assert(roundTimer.isActive());
 }    
   

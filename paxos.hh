@@ -17,7 +17,8 @@
 #include <fstream>
 #include <string>
 
-#define PAXOS_REQUEST_TIMEOUT 1000
+#define PAXOS_REQUEST_TIMEOUT 10000
+#define PROPOSER_RETRY_TIMEOUT 200
 
 class Log : public QObject {
   
@@ -112,7 +113,8 @@ signals:
     broadcastMessage(const QVariantMap& msg);
 
 public slots:
-  
+  void
+  buzz();  
   void 
   phase1 (quint32 round, QVariantMap value);
   void
@@ -143,6 +145,8 @@ private:
   
   ProposalNumber curProposal;
   QTimer roundTimer;
+
+  QTimer retryTimer;
   
   QVariantMap curValue;
   QVariantMap acceptValue;
