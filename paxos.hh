@@ -11,8 +11,29 @@
 #include <QSet>
 #include <QMetaType>
 #include <assert.h>
+#include <QStringList>
+
+#include <iostream>
+#include <fstream>
+#include <string>
 
 #define PAXOS_REQUEST_TIMEOUT 1000
+
+class Log : public QObject {
+  
+  Q_OBJECT
+public:
+  Log(const QString& fileName);
+
+  void 
+  log(const QString& tolog);
+  
+  QList<QString> 
+  readLog();
+
+private:
+  QString fileName;  
+};
 
 class ProposalNumber : public QObject{
 
@@ -105,6 +126,9 @@ public slots:
 
 private:
 
+  void 
+  replayLog(const QList<QString>& log, const QString& name);
+
   void
   phase2();
   QPair<ProposalNumber, QVariantMap> 
@@ -112,7 +136,7 @@ private:
   void
   broadcastCommit(ProposalNumber p);
   void
-  incrementProposalNumber(ProposalNumber &p);
+  incrementProposalNumber();
   
   PaxosCodes state;
   quint32 majority;
@@ -123,6 +147,8 @@ private:
   QVariantMap curValue;
   QVariantMap acceptValue;
   
+  Log *my_log;
+
   quint32 curRound;
 
   QSet<QString> uniquePhase1Replies;
@@ -135,7 +161,7 @@ class Acceptor : public QObject {
   Q_OBJECT
 
 public:  
-  Acceptor();
+  Acceptor(const QString &name);
 
 signals:
     void
@@ -149,7 +175,8 @@ public slots:
  
 private:
 
-
+  void
+  replayLog(const QList<QString>& log);
 
   // Begin: Abstract storage methods
   QPair<ProposalNumber, QVariantMap>
@@ -162,7 +189,7 @@ private:
   insertAccept(quint32 round, const ProposalNumber&p, const QVariantMap& value);
   // End: Abstract storage methods
 
-
+  Log *my_log;
 
   QMap<quint32, ProposalNumber> maxPromise;
   QMap<quint32, QVariantMap> acceptValues;
@@ -214,6 +241,9 @@ signals:
 
 private:
   
+  void
+  replayLog(const QList<QString> & log);
+
   QString
   newId();
   void
@@ -248,6 +278,8 @@ private:
 
   QString me;
   
+  Log *my_log;
+
   Proposer *proposer;
   Acceptor *acceptor;
 };

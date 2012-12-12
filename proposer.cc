@@ -7,20 +7,72 @@ Proposer::Proposer(quint32 given_majority, QString my_name)
   state = IDLE;
   majority = given_majority;
 
-  curProposal.number = 1;
-  curProposal.name = my_name;  
+  curProposal.number = 0;
+  curProposal.name = my_name;
+
+  QString file = "pxs-proposer-log-";
+  file += my_name;
+  file += ".txt";
+  
+  my_log = new Log(file);
+  QList<QString> old_commands =  my_log->readLog();
+  replayLog(old_commands, my_name);
+
   
   connect(&roundTimer, SIGNAL(timeout()),
 	  this, SLOT(processTimeout()));
   
-  incrementProposalNumber(curProposal);
+
+
+  incrementProposalNumber();
   qDebug() << "Proposer:Initialized proposal="<<curProposal.number<<" "<<curProposal.name<<" majority="<<majority;
 }
 
 void
-Proposer::incrementProposalNumber(ProposalNumber& p)
+Proposer::replayLog(const QList<QString>& log, const QString &name)
 {
+  ProposalNumber defaultProposal(0, name);
+
+  ProposalNumber p;
+  bool quit = false;
+
+  for(int i = 0; i < log.count(); ++i){
+    
+    QStringList splits = log[i].split(":");
+
+    if (splits[0] == "proposalnumber"){      
+
+      if((splits.count() == 4) && (splits[3] == "")){ 
+	p.name = splits[1];
+	p.number = splits[2].toULongLong();
+	
+	if (curProposal > defaultProposal)
+	  assert(p > curProposal);
+	
+	curProposal = p;
+      }
+      else 
+	quit = true;
+    }      
+    else
+      assert(false);
+        
+    if (quit)
+      break;
+  }
+}
+
+
+void
+Proposer::incrementProposalNumber()
+{
+  QString toLog;
+  QTextStream stream(&toLog);
+
+  
   curProposal = ProposalNumber::incr(curProposal);
+  stream <<  "proposalnumber:" << curProposal.name << ":" << curProposal.number << ":\n";
+  my_log->log(toLog);
 }
 
 void
@@ -28,7 +80,7 @@ Proposer::phase1(quint32 round, QVariantMap value)
 {  
   // Generate a new, globally unique proposal number, 
   // which doubles for a request identifier.
-  curProposal = ProposalNumber::incr(curProposal);
+  incrementProposalNumber();
   
   // Clean up the state from the previous try.
   uniquePhase1Replies.clear();
@@ -55,7 +107,7 @@ Proposer::phase1(quint32 round, QVariantMap value)
   // broadcast the proposal and start the timeout timer.
   state = PHASE1;  
   emit broadcastMessage(msg);
-  roundTimer.start(200);
+  roundTimer.start(PAXOS_REQUEST_TIMEOUT);
   assert(roundTimer.isActive());
 }
 
@@ -207,7 +259,7 @@ Proposer::phase2()
 
   state = PHASE2;
   emit broadcastMessage(msg);
-  roundTimer.start(200);
+  roundTimer.start(PAXOS_REQUEST_TIMEOUT);
   assert(roundTimer.isActive());
 }    
   

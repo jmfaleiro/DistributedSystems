@@ -1,10 +1,17 @@
 #include <paxos.hh>
 #include <QDebug>
 
-Acceptor::Acceptor()
+Acceptor::Acceptor(const QString& me)
 {
-
+  QString file = "pxs-acceptor-log-";
+  file += me;
+  file += ".txt";
+  
+  my_log = new Log(file);
+  QList<QString> old_commands =  my_log->readLog();
+  replayLog(old_commands);
 }
+
 
 void
 Acceptor::tryPromise(const QVariantMap& msg)
@@ -45,11 +52,12 @@ Acceptor::tryPromise(const QVariantMap& msg)
     }  
     
     reply["Paxos"] = pc;
+    
+    qDebug() << "Acceptor: promised!";
+    emit singleReceiver(reply, origin);
   }
-  
-  qDebug() << "Acceptor: promised!";
-  emit singleReceiver(reply, origin);
 }
+ 
 
 void
 Acceptor::tryAccept(const QVariantMap& msg)
@@ -112,12 +120,97 @@ Acceptor::maximumPromise(quint32 round)
 void
 Acceptor::insertNewPromise(quint32 round, const ProposalNumber& p)
 {
+
+  QString toLog;
+  QTextStream stream(&toLog);
+
+  stream << "promise:" << round << ":" << p.name << ":" << p.number << ":\n";
+  my_log->log(toLog);
+  
   maxPromise.insert(round, p);
 }
 
 void
 Acceptor::insertAccept(quint32 round, const ProposalNumber&p, const QVariantMap& value)
 {
+  QString toLog;
+  QTextStream stream(&toLog);
+  
+  stream << "accept:" << round << ":" << p.name << ":" << p.number << ":" << value["Id"].toString() << ":" << value["Value"].toString() << ":\n";
+  my_log->log(toLog);
+  
   acceptProposals.insert(round, p);
   acceptValues.insert(round, value);
+}
+
+void
+Acceptor::replayLog(const QList<QString>& log)
+{
+  quint32 round;
+  
+  ProposalNumber p;
+  ProposalNumber temp;
+  
+  QVariantMap value;
+  bool ok;
+  bool quit = false;
+
+  for(int i = 0; i < log.count(); ++i){
+    
+    QStringList splits = log[i].split(":");
+    
+    if (splits[0] == "accept"){
+            
+      if((splits.count()) == 7 && (splits[6] == "")){	
+	
+	round = splits[1].toUInt();
+
+	p.name = splits[2];
+	p.number = splits[3].toULongLong();
+
+	value.insert("Id", splits[4]);
+	value.insert("Value", splits[5]);
+	
+	if(acceptValues.contains(round)){
+	  
+	  temp = acceptProposals[round];
+	  assert (p >= temp);
+	}
+	
+	acceptValues.insert(round, value);
+	acceptProposals.insert(round, p);
+      }
+      else
+	quit = true;
+	
+    }
+    else if(splits[0] == "promise"){
+
+      
+      if((splits.count() == 5) && (splits[4] == "")){
+	
+	round = splits[1].toUInt();
+      
+	p.name = splits[2];
+	p.number = splits[3].toULongLong();
+      
+	if(maxPromise.contains(round)){
+
+	  temp = maxPromise[round];
+	  assert(p >= temp);
+	}
+      
+	maxPromise.insert(round, p);
+      }
+      else
+	quit = true;
+      
+    }
+
+    else
+      assert(false);
+    
+    if(quit)
+      break;
+  }
 }

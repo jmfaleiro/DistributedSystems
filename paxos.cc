@@ -6,16 +6,24 @@
 
 Paxos::Paxos(const QList<QString>& given_participants)
 {
-  
+
   assert(given_participants.count() >= 1);
   me = given_participants[0];
   maxSafeRound = 1;
 
   participants = given_participants;
   
-  proposer = new Proposer((given_participants.count()/2)+1, me);
-  acceptor = new Acceptor();
+  QString file = "pxs-commits-log-";
+  file += me;
+  file += ".txt";
+  
+  my_log = new Log(file);
+  QList<QString> old_commands =  my_log->readLog();
+  replayLog(old_commands);
 
+  proposer = new Proposer((given_participants.count()/2)+1, me);
+  acceptor = new Acceptor(me);
+  
 
   // Phase 1 Message -> Acceptor
   connect(this, SIGNAL(phase1Message(const QVariantMap&)),
@@ -214,9 +222,11 @@ Paxos::laggingRoundNumber(quint32 round, const QVariantMap& value)
   }
 }
 
+
+
 void
 Paxos::incrementSafeRound()
-{
+{  
   ++maxSafeRound;
 }
 
@@ -231,8 +241,48 @@ Paxos::storeCommit(quint32 round, const QVariantMap& value)
 {
   if (!commits.contains(round)){
     
+    QString toLog;
+    QTextStream stream(&toLog);
+        
+    stream << "commit" << ":" << round << ":" << value["Id"].toString() << ":" << value["Value"].toString() << ":\n";
+
+    my_log->log(toLog);
+    
     emit newValue(round, value["Value"].toString());
     commits.insert(round, value);
+  }
+}
+
+void
+Paxos::replayLog(const QList<QString> &log)
+{
+  quint32 round;
+  QVariantMap value;
+
+  bool quit = false;
+
+  for(int i = 0; i < log.count(); ++i){
+    
+    QStringList split = log[i].split(":");
+    
+    if (split[0] == "commit" && split[4] == ""){
+
+      round = split[1].toUInt();
+
+      value.insert("Id", split[2]);
+      value.insert("Value", split[3]);
+      
+      assert(!commits.contains(round));
+      
+      commits.insert(round, value);
+      qDebug() << "Replay log: found commit#" << round << ", value=" << value;
+    }
+    
+    else      
+      assert(false);
+    
+    if (quit)
+      break;
   }
 }
 
@@ -325,3 +375,32 @@ ProposalNumber::operator= (const ProposalNumber &second)
   return *this;
 }
 
+Log::Log(const QString &given_fileName)
+{
+  fileName = given_fileName;
+}
+
+void
+Log::log(const QString& tolog)
+{
+  std::ofstream logFile;
+  logFile.open(fileName.toStdString().c_str(), std::ios::out | std::ios::app);
+  logFile << tolog.toStdString();
+  logFile.close();
+}
+
+
+QList<QString>
+Log::readLog() 
+{
+  QList<QString> ret;
+  std::string temp;
+  std::ifstream logFile;
+  
+  logFile.open(fileName.toStdString().c_str());
+
+  while(std::getline(logFile, temp))    
+    ret.append(QString(temp.c_str()));
+
+  return ret;
+}
