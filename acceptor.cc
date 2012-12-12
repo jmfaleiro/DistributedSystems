@@ -18,11 +18,11 @@ Acceptor::tryPromise(const QVariantMap& msg)
   
   QVariantMap reply;
   
-  if (p > maxPromise[round]){
+  if (p > maximumPromise(round)){
 
     // Reply with the appropriate values
     ProposalNumber lastPromise = maxPromise[round];
-    maxPromise.insert(round, p);
+    insertNewPromise(round, p);
     PaxosCodes pc;
 
     QVariant proposalVar;
@@ -31,14 +31,14 @@ Acceptor::tryPromise(const QVariantMap& msg)
     reply["Round"] = round;
     reply["Proposal"] = proposalVar;
 
-    if (acceptValues.contains(round)){
+    QPair<ProposalNumber, QVariantMap> earlierAccept = getLastAccept(round);
+    
+    if (earlierAccept.first.number != 0){
       
       pc = PROMISEVALUE;
-      
-      reply["Value"] = acceptValues[round];
-      reply["AcceptedProp"] = QVariant::fromValue(acceptProposals[round]);
+      reply["Value"] = earlierAccept.second;
+      reply["AcceptedProp"] = QVariant::fromValue(earlierAccept.first);
     }
-    
     else {
       
       pc = PROMISENOVALUE;      
@@ -62,10 +62,9 @@ Acceptor::tryAccept(const QVariantMap& msg)
 
   QString origin = msg["Origin"].toString();
   
-  if (proposal >= maxPromise[round]){
+  if (proposal >= maximumPromise(round)){
     
-    acceptProposals.insert(round, proposal);
-    acceptValues.insert(round, value);
+    insertAccept(round, proposal, value);
 
     QVariantMap reply;
     PaxosCodes pc = ACCEPT;
@@ -84,3 +83,41 @@ Acceptor::tryAccept(const QVariantMap& msg)
   }
 }
 
+// Functions to abstract the underlying data-layer. For now, 
+// we're using in-memory data structures. 
+
+QPair<ProposalNumber, QVariantMap>
+Acceptor::getLastAccept(quint32 round)
+{
+  ProposalNumber p(0, "");
+  QVariantMap value;
+  if (acceptValues.contains(round)){
+    
+    assert(acceptProposals.contains(round));
+
+    value = acceptValues[round];
+    p = acceptProposals[round];
+  }
+  
+  QPair<ProposalNumber, QVariantMap> ret(p, value);
+  return ret;
+}
+
+ProposalNumber
+Acceptor::maximumPromise(quint32 round)
+{
+  return maxPromise[round];
+}
+
+void
+Acceptor::insertNewPromise(quint32 round, const ProposalNumber& p)
+{
+  maxPromise.insert(round, p);
+}
+
+void
+Acceptor::insertAccept(quint32 round, const ProposalNumber&p, const QVariantMap& value)
+{
+  acceptProposals.insert(round, p);
+  acceptValues.insert(round, value);
+}

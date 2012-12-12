@@ -111,6 +111,8 @@ private:
   checkAccepted();
   void
   broadcastCommit(ProposalNumber p);
+  void
+  incrementProposalNumber(ProposalNumber &p);
   
   PaxosCodes state;
   quint32 majority;
@@ -146,6 +148,21 @@ public slots:
   tryAccept(const QVariantMap& msg);
  
 private:
+
+
+
+  // Begin: Abstract storage methods
+  QPair<ProposalNumber, QVariantMap>
+  getLastAccept(quint32 round);
+  ProposalNumber
+  maximumPromise(quint32 round);
+  void
+  insertNewPromise(quint32 round, const ProposalNumber& p);
+  void
+  insertAccept(quint32 round, const ProposalNumber&p, const QVariantMap& value);
+  // End: Abstract storage methods
+
+
 
   QMap<quint32, ProposalNumber> maxPromise;
   QMap<quint32, QVariantMap> acceptValues;
@@ -204,6 +221,22 @@ private:
   
   void
   commit(QVariantMap msg);
+
+
+  
+  // Begin: Abstract data-layer functions.
+  void
+  incrementSafeRound();
+
+  quint32
+  getSafeRound();
+
+  void
+  storeCommit(quint32 round, const QVariantMap& value);
+
+  QPair<bool, QVariantMap>
+  checkCommitted(quint32 round);
+  // End: Abstract data-layer functions.
 
   QMap<quint32, QVariantMap> commits;
   

@@ -25,8 +25,6 @@ Paxos::Paxos(const QList<QString>& given_participants)
   connect(this, SIGNAL(phase2Message(const QVariantMap&)),
 	  acceptor, SLOT(tryAccept(const QVariantMap&)));
 
-
-
   
   
   // PromiseMessage -> Proposer
@@ -83,7 +81,7 @@ Paxos::clientRequest(const QString& value)
   if(pendingRequests.count() == 1){
     
     qDebug() << "Paxos: dispatching new request, with round="<<maxSafeRound;
-    proposer->phase1(maxSafeRound, pendingRequests[0]);
+    proposer->phase1(getSafeRound(), pendingRequests[0]);
   }
 }
 
@@ -151,15 +149,16 @@ Paxos::processPhase1(const QVariantMap&msg)
 {
   quint32 round = msg["Round"].toUInt();
   QString origin = msg["Origin"].toString();
-
-  if (commits.contains(round)){
+  
+  QPair<bool, QVariantMap> isCommitted = checkCommitted(round);
+  if (isCommitted.first){
     
     QVariantMap response;
     PaxosCodes pc = REJECT;
 
     response["Paxos"] = (int)pc;
     response["Round"] = round;
-    response["Value"] = commits[round];
+    response["Value"] = isCommitted.second;
     response["Proposal"] = msg["Proposal"];
     
     sendSingle(response, origin);
@@ -188,8 +187,7 @@ Paxos::commit(QVariantMap msg)
   quint32 round = msg["Round"].toUInt();
   QVariantMap value = msg["Value"].toMap();
   
-  commits.insert(round, value); 
-  emit newValue(round, value["Value"].toString());
+  storeCommit(round, value);
 }
 
 
@@ -197,14 +195,14 @@ void
 Paxos::laggingRoundNumber(quint32 round, const QVariantMap& value)
 {
   qDebug() << "In lagging round number";
-  assert(round == maxSafeRound);
-  ++maxSafeRound;
+  assert(round == getSafeRound());
+
+  incrementSafeRound();
   
   QString id = value["Id"].toString();
   QString proposedId = pendingRequests[0]["Id"].toString();
 
-  if (!commits.contains(round))
-    commits.insert(round, value);  
+  storeCommit(round, value);
   
   // Our value has been committed.
   if (id == proposedId)
@@ -212,9 +210,48 @@ Paxos::laggingRoundNumber(quint32 round, const QVariantMap& value)
     
   if (pendingRequests.count() > 0){
     qDebug() << "Paxos: dispatching new request with round="<<maxSafeRound;
-    proposer->phase1(maxSafeRound, pendingRequests[0]);  
+    proposer->phase1(getSafeRound(), pendingRequests[0]);  
   }
 }
+
+void
+Paxos::incrementSafeRound()
+{
+  ++maxSafeRound;
+}
+
+quint32
+Paxos::getSafeRound()
+{
+  return maxSafeRound;
+}
+
+void
+Paxos::storeCommit(quint32 round, const QVariantMap& value)
+{
+  if (!commits.contains(round)){
+    
+    emit newValue(round, value["Value"].toString());
+    commits.insert(round, value);
+  }
+}
+
+QPair<bool, QVariantMap>
+Paxos::checkCommitted(quint32 round)
+{
+  QVariantMap value;
+  bool isCommitted = false;
+
+  if (commits.contains(round)){
+    
+    isCommitted = true;
+    value = commits[round];
+  }
+  
+  QPair<bool, QVariantMap> ret(isCommitted, value);
+  return ret;
+}
+
 
 ProposalNumber::ProposalNumber()
 {

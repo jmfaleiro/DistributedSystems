@@ -13,8 +13,14 @@ Proposer::Proposer(quint32 given_majority, QString my_name)
   connect(&roundTimer, SIGNAL(timeout()),
 	  this, SLOT(processTimeout()));
   
-  curProposal = ProposalNumber::incr(curProposal);
+  incrementProposalNumber(curProposal);
   qDebug() << "Proposer:Initialized proposal="<<curProposal.number<<" "<<curProposal.name<<" majority="<<majority;
+}
+
+void
+Proposer::incrementProposalNumber(ProposalNumber& p)
+{
+  curProposal = ProposalNumber::incr(curProposal);
 }
 
 void
